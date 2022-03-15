@@ -39,14 +39,14 @@ public partial class SettingsInterface
             const uint red   = 0xFF202080;
             using var  color = ImGuiRaii.PushColor( ImGuiCol.Button, red );
             var        w     = Vector2.UnitX * ImGui.CalcItemWidth();
-            return ImGui.Button( $"Press Enter or Click Here to Save (Current Directory: {old})", w );
+            return ImGui.Button( $"按下回车或者点这里保存 (当前目录: {old})", w );
         }
 
         private static void DrawOpenDirectoryButton( int id, DirectoryInfo directory, bool condition )
         {
             ImGui.PushID( id );
-            var ret = ImGui.Button( "Open Directory" );
-            ImGuiCustom.HoverTooltip( "Open this directory in your configured file explorer." );
+            var ret = ImGui.Button( "打开目录" );
+            ImGuiCustom.HoverTooltip( "在你的默认资源管理器上显示此目录." );
             if( ret && condition && Directory.Exists( directory.FullName ) )
             {
                 Process.Start( new ProcessStartInfo( directory.FullName )
@@ -62,14 +62,14 @@ public partial class SettingsInterface
         {
             ImGui.BeginGroup();
             ImGui.SetNextItemWidth( SettingsMenu.InputTextWidth );
-            var save = ImGui.InputText( "Root Directory", ref _newModDirectory, 255, ImGuiInputTextFlags.EnterReturnsTrue );
+            var save = ImGui.InputText( "根目录", ref _newModDirectory, 255, ImGuiInputTextFlags.EnterReturnsTrue );
             ImGui.SameLine();
-            ImGuiComponents.HelpMarker( "This is where Penumbra will store your extracted mod files.\n"
-              + "TTMP files are not copied, just extracted.\n"
-              + "This directory needs to be accessible and you need write access here.\n"
-              + "It is recommended that this directory is placed on a fast hard drive, preferably an SSD.\n"
-              + "It should also be placed near the root of a logical drive - the shorter the total path to this folder, the better.\n"
-              + "Definitely do not place it in your Dalamud directory or any sub-directory thereof." );
+            ImGuiComponents.HelpMarker( "此目录用于Penumbra存储提取的模组文件.\n"
+              + "TTMP 并没有进行复制, 仅提取.\n"
+              + "你需要有该目录的读写权限才能正常使用.\n"
+              + "推荐将此文件夹存放至快速的磁盘, 比如说SSD.\n"
+              + "也同样推荐将文件夹存放至最靠近磁盘根目录的地方 - 路径越短越好.\n"
+              + "绝对不要放到Dalamud的根目录或其任何子目录." );
             ImGui.SameLine();
             DrawOpenDirectoryButton( 0, _base._modManager.BasePath, _base._modManager.Valid );
             ImGui.EndGroup();
@@ -92,12 +92,12 @@ public partial class SettingsInterface
         {
             ImGui.BeginGroup();
             ImGui.SetNextItemWidth( SettingsMenu.InputTextWidth );
-            var save = ImGui.InputText( "Temp Directory", ref _newTempDirectory, 255, ImGuiInputTextFlags.EnterReturnsTrue );
+            var save = ImGui.InputText( "临时目录", ref _newTempDirectory, 255, ImGuiInputTextFlags.EnterReturnsTrue );
             ImGui.SameLine();
-            ImGuiComponents.HelpMarker( "This is where Penumbra will store temporary meta manipulation files.\n"
-              + "Leave this blank if you have no reason not to.\n"
-              + "A directory 'penumbrametatmp' will be created as a sub-directory to the specified directory.\n"
-              + "If none is specified (i.e. this is blank) this directory will be created in the root directory instead.\n" );
+            ImGuiComponents.HelpMarker( "此目录用于Penumbra存储临时文件的地方.\n"
+              + "如果你不知道是干啥的话留空就行.\n"
+              + "目录 'penumbrametatmp' 将会在指定目录下生成.\n"
+              + "如果没有指定目录 (例如留空) 该目录就会创建至设定的根目录下.\n" );
             ImGui.SameLine();
             DrawOpenDirectoryButton( 1, _base._modManager.TempPath, _base._modManager.TempWritable );
             ImGui.EndGroup();
@@ -116,7 +116,7 @@ public partial class SettingsInterface
 
         private void DrawRediscoverButton()
         {
-            if( ImGui.Button( "Rediscover Mods" ) )
+            if( ImGui.Button( "刷新模组" ) )
             {
                 _base._menu.InstalledTab.Selector.ClearSelection();
                 _base._modManager.DiscoverMods();
@@ -124,13 +124,13 @@ public partial class SettingsInterface
             }
 
             ImGui.SameLine();
-            ImGuiComponents.HelpMarker( "Force Penumbra to completely re-scan your root directory as if it was restarted." );
+            ImGuiComponents.HelpMarker( "强制Penumbra重新扫描根目录, 就像重新启动游戏一样." );
         }
 
         private void DrawEnabledBox()
         {
             var enabled = _config.IsEnabled;
-            if( ImGui.Checkbox( "Enable Mods", ref enabled ) )
+            if( ImGui.Checkbox( "启用该模组", ref enabled ) )
             {
                 _base._penumbra.SetEnabled( enabled );
             }
@@ -139,21 +139,21 @@ public partial class SettingsInterface
         private void DrawShowAdvancedBox()
         {
             var showAdvanced = _config.ShowAdvanced;
-            if( ImGui.Checkbox( "Show Advanced Settings", ref showAdvanced ) )
+            if( ImGui.Checkbox( "显示高级设置", ref showAdvanced ) )
             {
                 _config.ShowAdvanced = showAdvanced;
                 _configChanged       = true;
             }
 
             ImGui.SameLine();
-            ImGuiComponents.HelpMarker( "Enable some advanced options in this window and in the mod selector.\n"
-              + "This is required to enable manually editing any mod information." );
+            ImGuiComponents.HelpMarker( "在这个窗口和模组选择器中启用一些高级选项.\n"
+              + "这是必须的, 以启用手动编辑任何mod信息." );
         }
 
         private void DrawSortFoldersFirstBox()
         {
             var foldersFirst = _config.SortFoldersFirst;
-            if( ImGui.Checkbox( "Sort Mod-Folders Before Mods", ref foldersFirst ) )
+            if( ImGui.Checkbox( "模组文件夹排序", ref foldersFirst ) )
             {
                 _config.SortFoldersFirst = foldersFirst;
                 _base._menu.InstalledTab.Selector.Cache.TriggerListReset();
@@ -162,13 +162,13 @@ public partial class SettingsInterface
 
             ImGui.SameLine();
             ImGuiComponents.HelpMarker(
-                "Prioritizes all mod-folders in the mod-selector in the Installed Mods tab so that folders come before single mods, instead of being sorted completely alphabetically" );
+                "在已安装模组选项卡的模组选择器中优先排序所有模组文件夹, 这样文件夹就会出现在单个模组之前, 而不是完全按照字母顺序排序" );
         }
 
         private void DrawScaleModSelectorBox()
         {
             var scaleModSelector = _config.ScaleModSelector;
-            if( ImGui.Checkbox( "Scale Mod Selector With Window Size", ref scaleModSelector ) )
+            if( ImGui.Checkbox( "缩放模组选择器至窗口大小", ref scaleModSelector ) )
             {
                 _config.ScaleModSelector = scaleModSelector;
                 _configChanged           = true;
@@ -176,13 +176,13 @@ public partial class SettingsInterface
 
             ImGui.SameLine();
             ImGuiComponents.HelpMarker(
-                "Instead of keeping the mod-selector in the Installed Mods tab a fixed width, this will let it scale with the total size of the Penumbra window." );
+                "在已安装模组选项卡中, 模组选择器将保持固定的宽度, 这将让它随Penumbra窗口的总大小缩放." );
         }
 
         private void DrawDisableSoundStreamingBox()
         {
             var tmp = Penumbra.Config.DisableSoundStreaming;
-            if( ImGui.Checkbox( "Disable Audio Streaming", ref tmp ) && tmp != Penumbra.Config.DisableSoundStreaming )
+            if( ImGui.Checkbox( "禁用音频流", ref tmp ) && tmp != Penumbra.Config.DisableSoundStreaming )
             {
                 Penumbra.Config.DisableSoundStreaming = tmp;
                 _configChanged                        = true;
@@ -200,20 +200,20 @@ public partial class SettingsInterface
 
             ImGui.SameLine();
             ImGuiComponents.HelpMarker(
-                "Disable streaming in the games audio engine.\n"
-              + "If you do not disable streaming, you can not replace sound files in the game (*.scd files), they will be ignored by Penumbra.\n\n"
-              + "Only touch this if you experience sound problems.\n"
-              + "If you toggle this, make sure no modified or to-be-modified sound file is currently playing or was recently playing, else you might crash." );
+                "禁用游戏音频引擎中的流媒体.\n"
+              + "如果你不禁用流媒体, 你不能替换游戏中的声音文件 (*.scd 文件), 这些文件将会被Penumbra忽略.\n\n"
+              + "只有在声音有问题时才碰这个.\n"
+              + "如果你打开了此选项, 请确保当前或最近播放的声音文件中没有修改或要修改的声音文件, 否则游戏可能会崩溃." );
         }
 
         private void DrawLogLoadedFilesBox()
         {
-            ImGui.Checkbox( "Log Loaded Files", ref _base._penumbra.ResourceLoader.LogAllFiles );
+            ImGui.Checkbox( "记录已加载的文件", ref _base._penumbra.ResourceLoader.LogAllFiles );
             ImGui.SameLine();
             var regex = _base._penumbra.ResourceLoader.LogFileFilter?.ToString() ?? string.Empty;
             var tmp   = regex;
             ImGui.SetNextItemWidth( SettingsMenu.InputTextWidth );
-            if( ImGui.InputTextWithHint( "##LogFilter", "Matching this Regex...", ref tmp, 64 ) && tmp != regex )
+            if( ImGui.InputTextWithHint( "##LogFilter", "符合此正则表达式...", ref tmp, 64 ) && tmp != regex )
             {
                 try
                 {
@@ -222,31 +222,31 @@ public partial class SettingsInterface
                 }
                 catch( Exception e )
                 {
-                    PluginLog.Debug( "Could not create regex:\n{Exception}", e );
+                    PluginLog.Debug( "无法创建此正则表达式:\n{Exception}", e );
                 }
             }
 
             ImGui.SameLine();
-            ImGuiComponents.HelpMarker( "Log all loaded files that match the given Regex to the PluginLog." );
+            ImGuiComponents.HelpMarker( "将所有与正则表达式匹配的加载文件记录到PluginLog中." );
         }
 
         private void DrawDisableNotificationsBox()
         {
             var fsWatch = _config.DisableFileSystemNotifications;
-            if( ImGui.Checkbox( "Disable Filesystem Change Notifications", ref fsWatch ) )
+            if( ImGui.Checkbox( "禁用文件系统更改通知", ref fsWatch ) )
             {
                 _config.DisableFileSystemNotifications = fsWatch;
                 _configChanged                         = true;
             }
 
             ImGui.SameLine();
-            ImGuiComponents.HelpMarker( "Currently does nothing." );
+            ImGuiComponents.HelpMarker( "目前没啥用." );
         }
 
         private void DrawEnableHttpApiBox()
         {
             var http = _config.EnableHttpApi;
-            if( ImGui.Checkbox( "Enable HTTP API", ref http ) )
+            if( ImGui.Checkbox( "启用 HTTP API", ref http ) )
             {
                 if( http )
                 {
@@ -262,13 +262,13 @@ public partial class SettingsInterface
             }
 
             ImGui.SameLine();
-            ImGuiComponents.HelpMarker( "Currently does nothing." );
+            ImGuiComponents.HelpMarker( "目前没啥用." );
         }
 
         private void DrawEnabledPlayerWatcher()
         {
             var enabled = _config.EnablePlayerWatch;
-            if( ImGui.Checkbox( "Enable Automatic Character Redraws", ref enabled ) )
+            if( ImGui.Checkbox( "启用自动角色重绘", ref enabled ) )
             {
                 _config.EnablePlayerWatch = enabled;
                 _configChanged            = true;
@@ -305,14 +305,14 @@ public partial class SettingsInterface
 
         private static void DrawReloadResourceButton()
         {
-            if( ImGui.Button( "Reload Resident Resources" ) )
+            if( ImGui.Button( "重载常驻文件" ) )
             {
                 Service< ResidentResources >.Get().ReloadResidentResources();
             }
 
             ImGui.SameLine();
-            ImGuiComponents.HelpMarker( "Reload some specific files that the game keeps in memory at all times.\n"
-              + "You usually should not need to do this." );
+            ImGuiComponents.HelpMarker( "重新加载游戏始终保存在内存中的某些特定文件.\n"
+              + "通常情况下不需要操作." );
         }
 
         private void DrawAdvancedSettings()
@@ -327,7 +327,7 @@ public partial class SettingsInterface
 
         public void Draw()
         {
-            if( !ImGui.BeginTabItem( "Settings" ) )
+            if( !ImGui.BeginTabItem( "设置" ) )
             {
                 return;
             }

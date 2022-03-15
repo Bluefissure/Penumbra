@@ -21,7 +21,7 @@ public partial class SettingsInterface
                 "tsmLogo.png" ) );
             if( _icon != null )
             {
-                _entry = Dalamud.TitleScreenMenu.AddEntry( "Manage Penumbra", _icon, OnTriggered );
+                _entry = Dalamud.TitleScreenMenu.AddEntry( "Penumbra设置", _icon, OnTriggered );
             }
         }
 

@@ -17,7 +17,7 @@ public partial class SettingsInterface
 {
     private class TabCollections
     {
-        private const    string                    CharacterCollectionHelpPopup = "Character Collection Information";
+        private const    string                    CharacterCollectionHelpPopup = "角色合集信息";
         private readonly Selector                  _selector;
         private readonly ModManager                _manager;
         private          string                    _collectionNames         = null!;
@@ -44,7 +44,7 @@ public partial class SettingsInterface
             var ret = _collections.IndexOf( c => c.Name == collection.Name );
             if( ret < 0 )
             {
-                PluginLog.Error( $"Collection {collection.Name} is not found in collections." );
+                PluginLog.Error( $"合集 {collection.Name} 未能在合集列表中找到." );
                 return 0;
             }
 
@@ -97,7 +97,7 @@ public partial class SettingsInterface
 
         private void DrawCleanCollectionButton()
         {
-            if( ImGui.Button( "Clean Settings" ) )
+            if( ImGui.Button( "清除设置" ) )
             {
                 var changes = ModFunctions.CleanUpCollection( _manager.Collections.CurrentCollection.Settings,
                     _manager.BasePath.EnumerateDirectories() );
@@ -105,28 +105,28 @@ public partial class SettingsInterface
             }
 
             ImGuiCustom.HoverTooltip(
-                "Remove all stored settings for mods not currently available and fix invalid settings.\nUse at own risk." );
+                "删除当前不可用的模组的所有存储设置, 并修复无效设置.\n请谨慎对待." );
         }
 
         private void DrawNewCollectionInput()
         {
             ImGui.SetNextItemWidth( SettingsMenu.InputTextWidth );
-            ImGui.InputTextWithHint( "##New Collection", "New Collection Name", ref _newCollectionName, 64 );
+            ImGui.InputTextWithHint( "##New Collection", "新合集名称", ref _newCollectionName, 64 );
             ImGui.SameLine();
             ImGuiComponents.HelpMarker(
-                "A collection is a set of settings for your installed mods, including their enabled status, their priorities and their mod-specific configuration.\n"
-              + "You can use multiple collections to quickly switch between sets of mods." );
+                "合集是用于存储安装的mod的设置, 包括它们的启用状态、优先级和特定于模组的配置.\n"
+              + "你可以使用多个合集来快速切换模组设定." );
 
             using var style = ImGuiRaii.PushStyle( ImGuiStyleVar.Alpha, 0.5f, _newCollectionName.Length == 0 );
 
-            if( ImGui.Button( "Create New Empty Collection" ) && _newCollectionName.Length > 0 )
+            if( ImGui.Button( "创建空白合集" ) && _newCollectionName.Length > 0 )
             {
                 CreateNewCollection( new Dictionary< string, ModSettings >() );
             }
 
             var hover = ImGui.IsItemHovered();
             ImGui.SameLine();
-            if( ImGui.Button( "Duplicate Current Collection" ) && _newCollectionName.Length > 0 )
+            if( ImGui.Button( "复制当前合集" ) && _newCollectionName.Length > 0 )
             {
                 CreateNewCollection( _manager.Collections.CurrentCollection.Settings );
             }
@@ -136,13 +136,13 @@ public partial class SettingsInterface
             style.Pop();
             if( _newCollectionName.Length == 0 && hover )
             {
-                ImGui.SetTooltip( "Please enter a name before creating a collection." );
+                ImGui.SetTooltip( "请在创建合集前设置一个名字." );
             }
 
             var deleteCondition = _manager.Collections.Collections.Count > 1
              && _manager.Collections.CurrentCollection.Name              != ModCollection.DefaultCollection;
             ImGui.SameLine();
-            if( ImGuiCustom.DisableButton( "Delete Current Collection", deleteCondition ) )
+            if( ImGuiCustom.DisableButton( "删除当前合集", deleteCondition ) )
             {
                 _manager.Collections.RemoveCollection( _manager.Collections.CurrentCollection.Name );
                 SetCurrentCollection( _manager.Collections.CurrentCollection, true );
@@ -151,7 +151,7 @@ public partial class SettingsInterface
 
             if( !deleteCondition )
             {
-                ImGuiCustom.HoverTooltip( "You can not delete the default collection." );
+                ImGuiCustom.HoverTooltip( "你无法删除默认合集." );
             }
 
             if( Penumbra.Config.ShowAdvanced )
@@ -190,10 +190,10 @@ public partial class SettingsInterface
         {
             var index = _currentCollectionIndex;
             ImGui.SetNextItemWidth( SettingsMenu.InputTextWidth );
-            var combo = ImGui.Combo( "Current Collection", ref index, _collectionNames );
+            var combo = ImGui.Combo( "当前合集", ref index, _collectionNames );
             ImGui.SameLine();
             ImGuiComponents.HelpMarker(
-                "This collection will be modified when using the Installed Mods tab and making changes. It does not apply to anything by itself." );
+                "当使用已安装模组选项卡并做出改动时, 此合集会自动更改. 它本身并没啥用." );
 
             if( combo )
             {
@@ -213,11 +213,11 @@ public partial class SettingsInterface
 
             ImGui.SameLine();
             ImGuiComponents.HelpMarker(
-                "Mods in the default collection are loaded for any character that is not explicitly named in the character collections below.\n"
-              + "They also take precedence before the forced collection." );
+                "默认合集中的模组会被加载到任何没有在下面的角色合集中显式命名的角色.\n"
+              + "它们也优先于强制合集." );
 
             ImGui.SameLine();
-            ImGui.Text( "Default Collection" );
+            ImGui.Text( "默认合集" );
         }
 
         private void DrawForcedCollectionSelector()
@@ -237,27 +237,27 @@ public partial class SettingsInterface
             if( _manager.Collections.CharacterCollection.Count == 0 && ImGui.IsItemHovered() )
             {
                 ImGui.SetTooltip(
-                    "Forced Collections only provide value if you have at least one Character Collection. There is no need to set one until then." );
+                    "强制合集只在至少有一个角色合集的情况下才会提供值. 在此之前不需要设置." );
             }
 
             ImGui.SameLine();
             ImGuiComponents.HelpMarker(
-                "Mods in the forced collection are always loaded if not overwritten by anything in the current or character-based collection.\n"
-              + "Please avoid mixing meta-manipulating mods in Forced and other collections, as this will probably not work correctly." );
+                "强制合集中的模组如果没有被当前或基于角色的合集中的任何东西覆盖, 则总是被加载.\n"
+              + "请避免在强制和其他合集中混合使用模组, 因为这可能无法正常工作." );
             ImGui.SameLine();
-            ImGui.Text( "Forced Collection" );
+            ImGui.Text( "强制合集" );
         }
 
         private void DrawNewCharacterCollection()
         {
             ImGui.SetNextItemWidth( SettingsMenu.InputTextWidth );
-            ImGui.InputTextWithHint( "##New Character", "New Character Name", ref _newCharacterName, 32 );
+            ImGui.InputTextWithHint( "##New Character", "新角色名称", ref _newCharacterName, 32 );
             ImGui.SameLine();
-            ImGuiComponents.HelpMarker( "Click Me for Information!" );
+            ImGuiComponents.HelpMarker( "点我来查看帮助文本!" );
             ImGui.OpenPopupOnItemClick( CharacterCollectionHelpPopup, ImGuiPopupFlags.MouseButtonLeft );
 
             ImGui.SameLine();
-            if( ImGuiCustom.DisableButton( "Create New Character Collection",
+            if( ImGuiCustom.DisableButton( "创建新角色合集",
                    _newCharacterName.Length > 0 && Penumbra.Config.HasReadCharacterCollectionDesc ) )
             {
                 _manager.Collections.CreateCharacterCollection( _newCharacterName );
@@ -265,8 +265,8 @@ public partial class SettingsInterface
                 _newCharacterName                             = string.Empty;
             }
 
-            ImGuiCustom.HoverTooltip( "Please enter a Character name before creating the collection.\n"
-              + "You also need to have read the help text for character collections." );
+            ImGuiCustom.HoverTooltip( "在创建合集之前, 请输入角色名称.\n"
+              + "你还需要阅读角色合集的帮助文本." );
 
             DrawCharacterCollectionHelp();
         }
@@ -279,7 +279,7 @@ public partial class SettingsInterface
             var _ = true;
             if( ImGui.BeginPopupModal( CharacterCollectionHelpPopup, ref _, ImGuiWindowFlags.NoResize | ImGuiWindowFlags.NoMove ) )
             {
-                const string header    = "Character Collections are a Hack! Use them at your own risk.";
+                const string header    = "角色合集是一种外挂行为! 请自行承担风险.";
                 using var    end       = ImGuiRaii.DeferredEnd( ImGui.EndPopup );
                 var          textWidth = ImGui.CalcTextSize( header ).X;
                 ImGui.NewLine();
@@ -317,7 +317,7 @@ public partial class SettingsInterface
                 ImGui.SetCursorPos( new Vector2( offset, size.Y - 3 * ImGui.GetTextLineHeightWithSpacing() ) );
                 var state = ImGui.GetIO().KeyCtrl && ImGui.GetIO().KeyShift;
                 color.Push( ImGuiCol.ButtonHovered, 0xFF00A000, state );
-                if( ImGui.Button( "Understood!", buttonSize ) )
+                if( ImGui.Button( "我了解了!", buttonSize ) )
                 {
                     if( state && !Penumbra.Config.HasReadCharacterCollectionDesc )
                     {
@@ -376,7 +376,7 @@ public partial class SettingsInterface
 
         public void Draw()
         {
-            if( !ImGui.BeginTabItem( "Collections" ) )
+            if( !ImGui.BeginTabItem( "合集" ) )
             {
                 return;
             }

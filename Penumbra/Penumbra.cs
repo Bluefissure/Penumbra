@@ -65,7 +65,7 @@ public class Penumbra : IDalamudPlugin
 
         Dalamud.Commands.AddHandler( CommandName, new CommandInfo( OnCommand )
         {
-            HelpMessage = "/penumbra - toggle ui\n/penumbra reload - reload mod file lists & discover any new mods",
+            HelpMessage = "/penumbra - 打开菜单\n/penumbra reload - 重载所有模组 & 搜寻新模组",
         } );
 
         ResourceLoader.Init();
@@ -143,7 +143,7 @@ public class Penumbra : IDalamudPlugin
         {
             if( it is Item )
             {
-                ImGui.Text( "Left Click to create an item link in chat." );
+                ImGui.Text( "左键单击在聊天中创建一个物品展示." );
             }
         };
         Api.ChangedItemClicked += ( button, it ) =>
@@ -205,7 +205,7 @@ public class Penumbra : IDalamudPlugin
                 => string.Equals( c.Name, collectionName, StringComparison.InvariantCultureIgnoreCase ) );
         if( collection == null )
         {
-            Dalamud.Chat.Print( $"The collection {collection} does not exist." );
+            Dalamud.Chat.Print( $"合集 {collection} 不存在." );
             return false;
         }
 
@@ -214,36 +214,36 @@ public class Penumbra : IDalamudPlugin
             case "default":
                 if( collection == _modManager.Collections.DefaultCollection )
                 {
-                    Dalamud.Chat.Print( $"{collection.Name} already is the default collection." );
+                    Dalamud.Chat.Print( $"{collection.Name} 已经是默认合集." );
                     return false;
                 }
 
                 _modManager.Collections.SetDefaultCollection( collection );
-                Dalamud.Chat.Print( $"Set {collection.Name} as default collection." );
+                Dalamud.Chat.Print( $"设置 {collection.Name} 为默认合集." );
                 SettingsInterface.ResetDefaultCollection();
                 return true;
             case "forced":
                 if( collection == _modManager.Collections.ForcedCollection )
                 {
-                    Dalamud.Chat.Print( $"{collection.Name} already is the forced collection." );
+                    Dalamud.Chat.Print( $"{collection.Name} 已经是强制合集." );
                     return false;
                 }
 
                 _modManager.Collections.SetForcedCollection( collection );
-                Dalamud.Chat.Print( $"Set {collection.Name} as forced collection." );
+                Dalamud.Chat.Print( $"设置 {collection.Name} 为强制合集." );
                 SettingsInterface.ResetForcedCollection();
                 return true;
             default:
                 Dalamud.Chat.Print(
-                    "Second command argument is not default or forced, the correct command format is: /penumbra collection {default|forced} <collectionName>" );
+                    "第二个命令参数不是default或forced, 正确命令为: /penumbra collection {default|forced} <合集名称>" );
                 return false;
         }
     }
 
     private void OnCommand( string command, string rawArgs )
     {
-        const string modsEnabled  = "Your mods have now been enabled.";
-        const string modsDisabled = "Your mods have now been disabled.";
+        const string modsEnabled  = "你的模组已启用.";
+        const string modsDisabled = "你的模组已禁用.";
 
         var args = rawArgs.Split( new[] { ' ' }, 2 );
         if( args.Length > 0 && args[ 0 ].Length > 0 )
@@ -254,7 +254,7 @@ public class Penumbra : IDalamudPlugin
                 {
                     Service< ModManager >.Get().DiscoverMods();
                     Dalamud.Chat.Print(
-                        $"Reloaded Penumbra mods. You have {_modManager.Mods.Count} mods."
+                        $"已重载模组. 目前安装了 {_modManager.Mods.Count} 个模组."
                     );
                     break;
                 }
@@ -279,14 +279,14 @@ public class Penumbra : IDalamudPlugin
                 case "enable":
                 {
                     Dalamud.Chat.Print( Enable()
-                        ? "Your mods are already enabled. To disable your mods, please run the following command instead: /penumbra disable"
+                        ? "你的模组已经启用. 若要禁用, 请输入如下指令: /penumbra disable"
                         : modsEnabled );
                     break;
                 }
                 case "disable":
                 {
                     Dalamud.Chat.Print( Disable()
-                        ? "Your mods are already disabled. To enable your mods, please run the following command instead: /penumbra enable"
+                        ? "你的模组已经禁用. 若要启用, 请输入如下指令: /penumbra enable"
                         : modsDisabled );
                     break;
                 }
@@ -310,8 +310,8 @@ public class Penumbra : IDalamudPlugin
                     }
                     else
                     {
-                        Dalamud.Chat.Print( "Missing arguments, the correct command format is:"
-                          + " /penumbra collection {default|forced} <collectionName>" );
+                        Dalamud.Chat.Print( "丢失参数, 正确指令格式为:"
+                          + " /penumbra collection {default|forced} <合集名>" );
                     }
 
                     break;

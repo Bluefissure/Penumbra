@@ -18,12 +18,12 @@ namespace Penumbra.UI
     {
         private class TabImport
         {
-            private const string LabelTab               = "Import Mods";
-            private const string LabelImportButton      = "Import TexTools Modpacks";
-            private const string LabelFileDialog        = "Pick one or more modpacks.";
-            private const string LabelFileImportRunning = "Import in progress...";
-            private const string FileTypeFilter         = "TexTools TTMP Modpack (*.ttmp2)|*.ttmp*|All files (*.*)|*.*";
-            private const string TooltipModpack1        = "Writing modpack to disk before extracting...";
+            private const string LabelTab               = "导入模组";
+            private const string LabelImportButton      = "导入 TexTools 模组包";
+            private const string LabelFileDialog        = "选择一个或多个模组包.";
+            private const string LabelFileImportRunning = "正在导入...";
+            private const string FileTypeFilter         = "TexTools TTMP 模组包 (*.ttmp2)|*.ttmp*|All files (*.*)|*.*";
+            private const string TooltipModpack1        = "在提取前将模组包写入磁盘...";
 
             private const uint ColorRed    = 0xFF0000C8;
             private const uint ColorYellow = 0xFF00C8C8;
@@ -85,7 +85,7 @@ namespace Penumbra.UI
                                 }
                                 catch( Exception ex )
                                 {
-                                    PluginLog.LogError( ex, "Failed to import modpack at {0}", fileName );
+                                    PluginLog.LogError( ex, "无法导入模组包文件 {0}", fileName );
                                     _errorMessage = ex.Message;
                                 }
                             }
@@ -101,7 +101,7 @@ namespace Penumbra.UI
                     }
                     catch( Exception e )
                     {
-                        PluginLog.Error( $"Error opening file picker dialogue:\n{e}" );
+                        PluginLog.Error( $"无法打开文件选择对话框:\n{e}" );
                     }
 
                     _isImportRunning = false;
@@ -117,16 +117,16 @@ namespace Penumbra.UI
                     style.Pop();
 
                     using var color = ImGuiRaii.PushColor( ImGuiCol.Text, ColorRed );
-                    ImGui.Text( "Can not import since the mod directory path is not valid." );
+                    ImGui.Text( "无法进行导入 模组存放文件夹无效." );
                     ImGui.Dummy( Vector2.UnitY * ImGui.GetTextLineHeightWithSpacing() );
                     color.Pop();
 
-                    ImGui.Text( "Please set the mod directory in the settings tab." );
-                    ImGui.Text( "This folder should preferably be close to the root directory of your (preferably SSD) drive, for example" );
+                    ImGui.Text( "请在设置栏设定模组存放文件夹." );
+                    ImGui.Text( "这个文件夹最好靠近你(最好是SSD)驱动器的根目录, 例如" );
                     color.Push( ImGuiCol.Text, ColorYellow );
                     ImGui.Text( "        D:\\ffxivmods" );
                     color.Pop();
-                    ImGui.Text( "You can return to this tab once you've done that." );
+                    ImGui.Text( "你如果已经做完了以上步骤请重新打开导入模组栏." );
                 }
                 else if( ImGui.Button( LabelImportButton ) )
                 {
@@ -165,7 +165,7 @@ namespace Penumbra.UI
             private void DrawFailedImportMessage()
             {
                 using var color = ImGuiRaii.PushColor( ImGuiCol.Text, ColorRed );
-                ImGui.Text( $"One or more of your modpacks failed to import:\n\t\t{_errorMessage}" );
+                ImGui.Text( $"一个或多个模组包导入失败:\n\t\t{_errorMessage}" );
             }
 
             public void Draw()
