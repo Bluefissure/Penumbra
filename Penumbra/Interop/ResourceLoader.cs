@@ -79,38 +79,38 @@ public class ResourceLoader : IDisposable
     public unsafe void Init()
     {
         var readFileAddress =
-            Dalamud.SigScanner.ScanText( "E8 ?? ?? ?? ?? 84 C0 0F 84 ?? 00 00 00 4C 8B C3 BA 05" );
+            Dalamud.SigScanner.ScanText( "E8 ?? ?? ?? ?? 84 C0 0F 84 ?? 00 00 00 4C 8B C3 BA 05" ); //ok
         GeneralUtil.PrintDebugAddress( "ReadFile", readFileAddress );
 
         var readSqpackAddress =
-            Dalamud.SigScanner.ScanText( "E8 ?? ?? ?? ?? EB 05 E8 ?? ?? ?? ?? 84 C0 0F 84 ?? 00 00 00 4C 8B C3" );
+            Dalamud.SigScanner.ScanText( "E8 ?? ?? ?? ?? EB 05 E8 ?? ?? ?? ?? 84 C0 0F 84 ?? 00 00 00 4C 8B C3" ); //ok
         GeneralUtil.PrintDebugAddress( "ReadSqPack", readSqpackAddress );
 
         var getResourceSyncAddress =
-            Dalamud.SigScanner.ScanText( "E8 ?? ?? 00 00 48 8D 8F ?? ?? 00 00 48 89 87 ?? ?? 00 00" );
+            Dalamud.SigScanner.ScanText( "E8 ?? ?? 00 00 48 8D 8F ?? ?? 00 00 48 89 87 ?? ?? 00 00" ); //ok
         GeneralUtil.PrintDebugAddress( "GetResourceSync", getResourceSyncAddress );
 
         var getResourceAsyncAddress =
-            Dalamud.SigScanner.ScanText( "E8 ?? ?? ?? 00 48 8B D8 EB ?? F0 FF 83 ?? ?? 00 00" );
+            Dalamud.SigScanner.ScanText( "E8 ?? ?? ?? 00 48 8B D8 EB ?? F0 FF 83 ?? ?? 00 00" ); //ok
         GeneralUtil.PrintDebugAddress( "GetResourceAsync", getResourceAsyncAddress );
 
-        var checkFileStateAddress = Dalamud.SigScanner.ScanText( "E8 ?? ?? ?? ?? 48 85 c0 74 ?? 45 0f b6 ce 48 89 44 24" );
+        var checkFileStateAddress = Dalamud.SigScanner.ScanText( "E8 ?? ?? ?? ?? 48 85 c0 74 ?? 45 0f b6 ce 48 89 44 24" ); //ok
         GeneralUtil.PrintDebugAddress( "CheckFileState", checkFileStateAddress );
 
         var loadTexFileLocalAddress =
-            Dalamud.SigScanner.ScanText( "48 89 5C 24 08 48 89 6C 24 10 48 89 74 24 18 57 48 83 EC 30 49 8B F0 44 88 4C 24 20" );
+            Dalamud.SigScanner.ScanText( "48 89 5C 24 08 48 89 6C 24 10 48 89 74 24 18 57 48 83 EC 30 49 8B F0 44 88 4C 24 20" ); //ok
         GeneralUtil.PrintDebugAddress( "LoadTexFileLocal", loadTexFileLocalAddress );
 
         var loadTexFileExternAddress =
-            Dalamud.SigScanner.ScanText( "E8 ?? ?? ?? ?? 0F B6 E8 48 8B CB E8" );
+            Dalamud.SigScanner.ScanText( "E8 ?? ?? ?? ?? 0F B6 E8 48 8B CB E8" ); //ok
         GeneralUtil.PrintDebugAddress( "LoadTexFileExtern", loadTexFileExternAddress );
 
         var loadMdlFileLocalAddress =
-            Dalamud.SigScanner.ScanText( "40 55 53 56 57 41 56 41 57 48 8D 6C 24 D1 48 81 EC 98 00 00 00" );
+            Dalamud.SigScanner.ScanText( "40 55 53 56 57 41 56 41 57 48 8D 6C 24 D1 48 81 EC 98 00 00 00" ); //ok
         GeneralUtil.PrintDebugAddress( "LoadMdlFileLocal", loadMdlFileLocalAddress );
 
         var loadMdlFileExternAddress =
-            Dalamud.SigScanner.ScanText( "E8 ?? ?? ?? ?? EB 02 B0 F1" );
+            Dalamud.SigScanner.ScanText( "E8 ?? ?? ?? ?? EB 02 B0 F1" ); //ok
         GeneralUtil.PrintDebugAddress( "LoadMdlFileExtern", loadMdlFileExternAddress );
 
         ReadSqpackHook       = new Hook< ReadSqpackPrototype >( readSqpackAddress, ReadSqpackHandler );
