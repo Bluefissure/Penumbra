@@ -22,22 +22,22 @@ namespace Penumbra.UI
         private partial class PluginDetails
         {
             private const string LabelPluginDetails      = "PenumbraPluginDetails";
-            private const string LabelAboutTab           = "About";
-            private const string LabelChangedItemsTab    = "Changed Items";
+            private const string LabelAboutTab           = "关于";
+            private const string LabelChangedItemsTab    = "更改的物品";
             private const string LabelChangedItemsHeader = "##changedItems";
-            private const string LabelConflictsTab       = "Mod Conflicts";
+            private const string LabelConflictsTab       = "模组冲突";
             private const string LabelConflictsHeader    = "##conflicts";
-            private const string LabelFileSwapTab        = "File Swaps";
+            private const string LabelFileSwapTab        = "文件修改";
             private const string LabelFileSwapHeader     = "##fileSwaps";
-            private const string LabelFileListTab        = "Files";
+            private const string LabelFileListTab        = "文件列表";
             private const string LabelFileListHeader     = "##fileList";
             private const string LabelGroupSelect        = "##groupSelect";
             private const string LabelOptionSelect       = "##optionSelect";
-            private const string LabelConfigurationTab   = "Configuration";
+            private const string LabelConfigurationTab   = "模组配置";
 
             private const string TooltipFilesTab =
-                "Green files replace their standard game path counterpart (not in any option) or are in all options of a Single-Select option.\n"
-              + "Yellow files are restricted to some options.";
+                "绿色文件替换了它们的标准游戏路径对应物 (不在任何选项中), 或者在单选选项中的所有选项中.\n"
+              + "黄色文件会被某些选项限制.";
 
             private const float OptionSelectionWidth = 140f;
             private const float CheckMarkSize        = 50f;
@@ -454,7 +454,7 @@ namespace Penumbra.UI
             private void DrawGamePathInput()
             {
                 ImGui.SetNextItemWidth( -1 );
-                ImGui.InputTextWithHint( LabelGamePathsEditBox, "Hover for help...", ref _currentGamePaths,
+                ImGui.InputTextWithHint( LabelGamePathsEditBox, "悬浮来获取帮助...", ref _currentGamePaths,
                     128 );
                 ImGuiCustom.HoverTooltip( TooltipGamePathsEdit );
             }

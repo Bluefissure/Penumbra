@@ -11,7 +11,7 @@ namespace Penumbra.UI
     {
         private class TabChangedItems
         {
-            private const    string            LabelTab = "Changed Items";
+            private const    string            LabelTab = "更改的物品";
             private readonly ModManager        _modManager;
             private readonly SettingsInterface _base;
 
@@ -36,7 +36,7 @@ namespace Penumbra.UI
                 using var raii = ImGuiRaii.DeferredEnd( ImGui.EndTabItem );
 
                 ImGui.SetNextItemWidth( -1 );
-                if( ImGui.InputTextWithHint( "##ChangedItemsFilter", "Filter...", ref _filter, 64 ) )
+                if( ImGui.InputTextWithHint( "##ChangedItemsFilter", "过滤...", ref _filter, 64 ) )
                 {
                     _filterLower = _filter.ToLowerInvariant();
                 }

@@ -22,28 +22,28 @@ public partial class SettingsInterface
         private const string LabelEditVersion       = "##editVersion";
         private const string LabelEditAuthor        = "##editAuthor";
         private const string LabelEditWebsite       = "##editWebsite";
-        private const string LabelModEnabled        = "Enabled";
-        private const string LabelEditingEnabled    = "Enable Editing";
+        private const string LabelModEnabled        = "已启用";
+        private const string LabelEditingEnabled    = "启用编辑";
         private const string LabelOverWriteDir      = "OverwriteDir";
-        private const string ButtonOpenWebsite      = "Open Website";
-        private const string ButtonOpenModFolder    = "Open Mod Folder";
-        private const string ButtonRenameModFolder  = "Rename Mod Folder";
-        private const string ButtonEditJson         = "Edit JSON";
-        private const string ButtonReloadJson       = "Reload JSON";
-        private const string ButtonDeduplicate      = "Deduplicate";
+        private const string ButtonOpenWebsite      = "打开网页";
+        private const string ButtonOpenModFolder    = "打开模组文件夹";
+        private const string ButtonRenameModFolder  = "重命名模组文件夹";
+        private const string ButtonEditJson         = "编辑 JSON";
+        private const string ButtonReloadJson       = "重载 JSON";
+        private const string ButtonDeduplicate      = "除重";
         private const string ButtonNormalize        = "Normalize";
-        private const string TooltipOpenModFolder   = "Open the directory containing this mod in your default file explorer.";
-        private const string TooltipRenameModFolder = "Rename the directory containing this mod without opening another application.";
-        private const string TooltipEditJson        = "Open the JSON configuration file in your default application for .json.";
-        private const string TooltipReloadJson      = "Reload the configuration of all mods.";
-        private const string PopupRenameFolder      = "Rename Folder";
+        private const string TooltipOpenModFolder   = "在默认的文件管理器中打开包含此模组的目录.";
+        private const string TooltipRenameModFolder = "在不打开另一个应用程序的情况下重命名包含此模组的目录.";
+        private const string TooltipEditJson        = "在默认的应用程序中打开JSON配置文件.";
+        private const string TooltipReloadJson      = "重新加载所有模组的配置.";
+        private const string PopupRenameFolder      = "重命名文件夹";
 
         private const string TooltipDeduplicate =
-            "Try to find identical files and remove duplicate occurences to reduce the mods disk size.\n"
-          + "Introduces an invisible single-option Group \"Duplicates\".\nExperimental - use at own risk!";
+            "尝试找到相同的文件, 并删除重复的文件, 以减少模组占用大小.\n"
+          + "引入不可见的单选项组 \"重复文件\".\n实验性功能 - 后果自负!";
 
         private const string TooltipNormalize =
-            "Try to reduce unnecessary options or subdirectories to default options if possible.\nExperimental - use at own risk!";
+            "尽量减少不必要的选项或子目录为默认选项.\n实验性功能 - 后果自负!";
 
         private const           float   HeaderLineDistance = 10f;
         private static readonly Vector4 GreyColor          = new(1f, 1f, 1f, 0.66f);
@@ -96,7 +96,7 @@ public partial class SettingsInterface
             {
                 ImGui.BeginGroup();
                 using var raii = ImGuiRaii.DeferredEnd( ImGui.EndGroup );
-                ImGui.Text( "(Version " );
+                ImGui.Text( "(版本 " );
 
                 using var style = ImGuiRaii.PushStyle( ImGuiStyleVar.ItemSpacing, ZeroVector );
                 ImGui.SameLine();
@@ -113,7 +113,7 @@ public partial class SettingsInterface
             }
             else if( Meta!.Version.Length > 0 )
             {
-                ImGui.Text( $"(Version {Meta.Version})" );
+                ImGui.Text( $"(版本 {Meta.Version})" );
             }
         }
 
@@ -204,7 +204,7 @@ public partial class SettingsInterface
         {
             var priority = Mod!.Settings.Priority;
             ImGui.SetNextItemWidth( 50 * ImGuiHelpers.GlobalScale );
-            if( ImGui.InputInt( "Priority", ref priority, 0 ) && priority != Mod!.Settings.Priority )
+            if( ImGui.InputInt( "加载优先级", ref priority, 0 ) && priority != Mod!.Settings.Priority )
             {
                 Mod.Settings.Priority = priority;
                 _base.SaveCurrentCollection( Mod.Data.Resources.MetaManipulations.Count > 0 );
@@ -212,8 +212,8 @@ public partial class SettingsInterface
             }
 
             ImGuiCustom.HoverTooltip(
-                "Higher priority mods take precedence over other mods in the case of file conflicts.\n"
-              + "In case of identical priority, the alphabetically first mod takes precedence." );
+                "在文件冲突的情况下, 优先级更高的模组会优先于其他模组的加载.\n"
+              + "在相同优先级情况下会根据字母决定加载顺序." );
         }
 
         private void DrawEnabledMark()
@@ -240,7 +240,7 @@ public partial class SettingsInterface
         {
             var currentSortOrder = mod.SortOrder.FullPath;
             ImGui.SetNextItemWidth( 300 * ImGuiHelpers.GlobalScale );
-            if( ImGui.InputText( "Sort Order", ref currentSortOrder, 256, ImGuiInputTextFlags.EnterReturnsTrue ) )
+            if( ImGui.InputText( "排序顺序", ref currentSortOrder, 256, ImGuiInputTextFlags.EnterReturnsTrue ) )
             {
                 manager.ChangeSortOrder( mod, currentSortOrder );
                 selector.SelectModOnUpdate( mod.BasePath.Name );
@@ -305,7 +305,7 @@ public partial class SettingsInterface
                     {
                         if( !_modManager.RenameModFolder( Mod.Data, newDir ) )
                         {
-                            PluginLog.Error( "Could not recapitalize folder after renaming, reverting rename." );
+                            PluginLog.Error( "重命名后无法重新调整文件夹, 撤销重命名." );
                             _modManager.RenameModFolder( Mod.Data, dir );
                         }
 
@@ -342,7 +342,7 @@ public partial class SettingsInterface
             }
             catch( Exception e )
             {
-                PluginLog.Error( $"Could not merge directory {source.FullName} into {target.FullName}:\n{e}" );
+                PluginLog.Error( $"无法合并文件夹 {source.FullName} 至 {target.FullName}:\n{e}" );
             }
 
             return false;
@@ -362,7 +362,7 @@ public partial class SettingsInterface
             var           dir    = Mod!.Data.BasePath;
             DirectoryInfo newDir = new(Path.Combine( dir.Parent!.FullName, _newName ));
             ImGui.Text(
-                $"The mod directory {newDir} already exists.\nDo you want to merge / overwrite both mods?\nThis may corrupt the resulting mod in irrecoverable ways." );
+                $"模组文件夹 {newDir} 已存在.\n你确定要合并/覆写两个模组?\n这可能会以不可挽回的方式破坏模组." );
             var buttonSize = ImGuiHelpers.ScaledVector2( 120, 0 );
             if( ImGui.Button( "Yes", buttonSize ) )
             {
@@ -379,7 +379,7 @@ public partial class SettingsInterface
 
             ImGui.SameLine();
 
-            if( ImGui.Button( "Cancel", buttonSize ) )
+            if( ImGui.Button( "取消", buttonSize ) )
             {
                 _keyboardFocus = true;
                 ImGui.CloseCurrentPopup();
@@ -420,7 +420,7 @@ public partial class SettingsInterface
             }
 
             ImGui.TextColored( GreyColor,
-                "Please restrict yourself to ascii symbols that are valid in a windows path,\nother symbols will be replaced by underscores." );
+                "请限制自己使用在Windows路径中有效的ascii符号,\n其他符号会被下划线代替." );
 
             ImGui.SetNextWindowPos( ImGui.GetMainViewport().GetCenter(), ImGuiCond.Appearing, Vector2.One / 2 );
 

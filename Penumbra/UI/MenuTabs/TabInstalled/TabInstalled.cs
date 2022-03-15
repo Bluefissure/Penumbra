@@ -10,7 +10,7 @@ namespace Penumbra.UI
     {
         private class TabInstalled
         {
-            private const string LabelTab = "Installed Mods";
+            private const string LabelTab = "已安装模组";
 
             private readonly ModManager _modManager;
             public readonly  Selector   Selector;

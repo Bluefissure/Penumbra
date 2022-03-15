@@ -27,13 +27,13 @@ public partial class SettingsInterface
         private const string LabelModHelpPopup = "Help##Selector";
 
         private const string TooltipModFilter =
-            "Filter mods for those containing the given substring.\nEnter c:[string] to filter for mods changing specific items.\nEnter a:[string] to filter for mods by specific authors.";
+            "过滤包含给定子字符串的模组.\n输入 c:[字符串] 来搜寻替换特定物品的模组.\n输入 a:[字符串] 来搜寻特定作者的模组.";
 
-        private const string TooltipDelete   = "Delete the selected mod";
-        private const string TooltipAdd      = "Add an empty mod";
+        private const string TooltipDelete   = "删除选中的模组";
+        private const string TooltipAdd      = "添加空白的模组";
         private const string DialogDeleteMod = "PenumbraDeleteMod";
-        private const string ButtonYesDelete = "Yes, delete it";
-        private const string ButtonNoDelete  = "No, keep it";
+        private const string ButtonYesDelete = "确定删除";
+        private const string ButtonNoDelete  = "算了";
 
         private const float SelectorPanelWidth = 240f;
 
@@ -89,7 +89,7 @@ public partial class SettingsInterface
                 return;
             }
 
-            ImGui.Text( "Are you sure you want to delete the following mod:" );
+            ImGui.Text( "你确定要删除以下模组吗:" );
             var halfLine = new Vector2( ImGui.GetTextLineHeight() / 2 );
             ImGui.Dummy( halfLine );
             ImGui.TextColored( DeleteModNameColor, Mod.Data.Meta.Name );
@@ -151,7 +151,7 @@ public partial class SettingsInterface
             }
 
             var newName = "";
-            if( ImGui.InputTextWithHint( "##AddMod", "New Mod Name...", ref newName, 64, ImGuiInputTextFlags.EnterReturnsTrue ) )
+            if( ImGui.InputTextWithHint( "##AddMod", "新模组名称...", ref newName, 64, ImGuiInputTextFlags.EnterReturnsTrue ) )
             {
                 try
                 {
@@ -159,7 +159,7 @@ public partial class SettingsInterface
                         newName );
                     var modMeta = new ModMeta
                     {
-                        Author      = "Unknown",
+                        Author      = "未知",
                         Name        = newName.Replace( '/', '\\' ),
                         Description = string.Empty,
                     };
@@ -172,7 +172,7 @@ public partial class SettingsInterface
                 }
                 catch( Exception e )
                 {
-                    PluginLog.Error( $"Could not create directory for new Mod {newName}:\n{e}" );
+                    PluginLog.Error( $"无法为新模组新建文件夹 {newName}:\n{e}" );
                 }
 
                 ImGui.CloseCurrentPopup();
@@ -208,28 +208,28 @@ public partial class SettingsInterface
             using var raii = ImGuiRaii.DeferredEnd( ImGui.EndPopup );
 
             ImGui.Dummy( Vector2.UnitY * ImGui.GetTextLineHeight() );
-            ImGui.Text( "Mod Selector" );
-            ImGui.BulletText( "Select a mod to obtain more information." );
-            ImGui.BulletText( "Mod names are colored according to their current state in the collection:" );
+            ImGui.Text( "模组选择" );
+            ImGui.BulletText( "选择一个模组来获取更多信息." );
+            ImGui.BulletText( "模组名称根据它们在合集中的当前状态着色:" );
             ImGui.Indent();
             ImGui.Bullet();
             ImGui.SameLine();
-            ImGui.Text( "Enabled in the current collection." );
+            ImGui.Text( "已在当前合集中启用." );
             ImGui.Bullet();
             ImGui.SameLine();
-            ImGui.TextColored( ImGui.ColorConvertU32ToFloat4( ModListCache.DisabledModColor ), "Disabled in the current collection." );
+            ImGui.TextColored( ImGui.ColorConvertU32ToFloat4( ModListCache.DisabledModColor ), "已在当前合集中禁用." );
             ImGui.Bullet();
             ImGui.SameLine();
             ImGui.TextColored( ImGui.ColorConvertU32ToFloat4( ModListCache.NewModColor ),
-                "Newly imported during this session. Will go away when first enabling a mod or when Penumbra is reloaded." );
+                "刚刚导入的模组. 在第一次启用模组时或Penumbra重新加载时就会消失." );
             ImGui.Bullet();
             ImGui.SameLine();
             ImGui.TextColored( ImGui.ColorConvertU32ToFloat4( ModListCache.HandledConflictModColor ),
-                "Enabled and conflicting with another enabled Mod, but on different priorities (i.e. the conflict is solved)." );
+                "启用后与另一个已启用的模组存在冲突, 但不在相同的优先级 (例如手动解决了冲突)." );
             ImGui.Bullet();
             ImGui.SameLine();
             ImGui.TextColored( ImGui.ColorConvertU32ToFloat4( ModListCache.ConflictingModColor ),
-                "Enabled and conflicting with another enabled Mod on the same priority." );
+                "启用后与另一个相同加载顺序的模组冲突." );
             ImGui.Unindent();
             ImGui.BulletText( "Right-click a mod to enter its sort order, which is its name by default." );
             ImGui.Indent();
@@ -243,31 +243,31 @@ public partial class SettingsInterface
             ImGui.Unindent();
             ImGui.BulletText(
                 "You can drag and drop mods and subfolders into existing folders. Dropping them onto mods is the same as dropping them onto the parent of the mod." );
-            ImGui.BulletText( "Right-clicking a folder opens a context menu." );
+            ImGui.BulletText( "右键单击一个文件夹会打开一个上下文菜单." );
             ImGui.Indent();
             ImGui.BulletText(
-                "You can rename folders in the context menu. Leave the text blank and press enter to merge the folder with its parent." );
-            ImGui.BulletText( "You can also enable or disable all descendant mods of a folder." );
+                "你可以在上下文菜单中重命名文件夹. 将文本留空, 并按回车键会将文件夹与其父文件夹合并." );
+            ImGui.BulletText( "你还可以启用或禁用一个文件夹的所有子模组." );
             ImGui.Unindent();
-            ImGui.BulletText( "Use the Filter Mods... input at the top to filter the list for mods with names containing the text." );
+            ImGui.BulletText( "使用 过滤模组... 的顶部输入框, 以过滤列表中名称包含文本的模组." );
             ImGui.Indent();
-            ImGui.BulletText( "You can enter c:[string] to filter for Changed Items instead." );
-            ImGui.BulletText( "You can enter a:[string] to filter for Mod Authors instead." );
+            ImGui.BulletText( "你可以输入 c:[字符串] 来过滤更换了特定物品的模组." );
+            ImGui.BulletText( "你可以输入 a:[字符串] 来过滤特定作者的模组." );
             ImGui.Unindent();
-            ImGui.BulletText( "Use the expandable menu beside the input to filter for mods fulfilling specific criteria." );
+            ImGui.BulletText( "使用输入框旁边的可扩展菜单来过滤符合特定条件的模组." );
             ImGui.Dummy( Vector2.UnitY * ImGui.GetTextLineHeight() );
-            ImGui.Text( "Mod Management" );
-            ImGui.BulletText( "You can delete the currently selected mod with the trashcan button." );
-            ImGui.BulletText( "You can add a completely empty mod with the plus button." );
-            ImGui.BulletText( "You can import TTMP-based mods in the import tab." );
+            ImGui.Text( "模组管理" );
+            ImGui.BulletText( "你可以点击\"垃圾桶\"按钮删除当前选中的模组." );
+            ImGui.BulletText( "你可以使用\"加号\"来创建完全空白的模组." );
+            ImGui.BulletText( "你可以在导入模组选项卡导入TexTools模组." );
             ImGui.BulletText(
-                "You can import penumbra-based mods by moving the corresponding folder into your mod directory in a file explorer, then rediscovering mods." );
+                "你可以导入基于Penumbra的mod, 通过移动相应的文件夹到你的模组根目录中, 然后重新载入模组." );
             ImGui.BulletText(
-                "If you enable Advanced Options in the Settings tab, you can toggle Edit Mode to manipulate your selected mod even further." );
+                "如果你在设置选项卡中启用了高级选项, 你可以切换编辑模式来更进一步操作你选择的模组." );
             ImGui.Dummy( Vector2.UnitY * ImGui.GetTextLineHeight() );
             ImGui.Dummy( Vector2.UnitX * 2 * SelectorPanelWidth );
             ImGui.SameLine();
-            if( ImGui.Button( "Understood", Vector2.UnitX * SelectorPanelWidth ) )
+            if( ImGui.Button( "我了解了", Vector2.UnitX * SelectorPanelWidth ) )
             {
                 ImGui.CloseCurrentPopup();
             }
@@ -297,7 +297,7 @@ public partial class SettingsInterface
         {
             ImGui.SetNextItemWidth( SelectorPanelWidth * _selectorScalingFactor - 22 * ImGuiHelpers.GlobalScale );
             var tmp = _modFilterInput;
-            if( ImGui.InputTextWithHint( LabelModFilter, "Filter Mods...", ref tmp, 256 ) && _modFilterInput != tmp )
+            if( ImGui.InputTextWithHint( LabelModFilter, "过滤模组...", ref tmp, 256 ) && _modFilterInput != tmp )
             {
                 Cache.SetTextFilter( tmp );
                 _modFilterInput = tmp;
@@ -321,7 +321,7 @@ public partial class SettingsInterface
                 Cache.StateFilter = ( ModFilter )flags;
             }
 
-            ImGuiCustom.HoverTooltip( "Filter mods for their activation status." );
+            ImGuiCustom.HoverTooltip( "过滤模组的启用状态." );
         }
 
         private void DrawModsSelectorFilter()

@@ -8,10 +8,10 @@ namespace Penumbra.UI
         private class MenuBar
         {
             private const string MenuLabel          = "Penumbra";
-            private const string MenuItemToggle     = "Toggle UI";
+            private const string MenuItemToggle     = "打开GUI";
             private const string SlashCommand       = "/penumbra";
-            private const string MenuItemRediscover = "Rediscover Mods";
-            private const string MenuItemHide       = "Hide Menu Bar";
+            private const string MenuItemRediscover = "重载模组";
+            private const string MenuItemHide       = "隐藏菜单栏";
 
 #if DEBUG
             private bool _showDebugBar = true;
