@@ -6,7 +6,7 @@
         "InternalName": "Penumbra",
         "AssemblyVersion": "0.4.7.7",
         "TestingAssemblyVersion": "0.4.7.7",
-        "RepoUrl": "https://github.com/xivdev/Penumbra",
+        "RepoUrl": "https://github.com/Bluefissure/Penumbra",
         "ApplicableVersion": "any",
         "DalamudApiLevel": 5,
         "IsHide": "False",
@@ -14,9 +14,9 @@
         "DownloadCount": 0,
         "LastUpdate": 0,
         "LoadPriority": 69420,
-        "DownloadLinkInstall": "https://github.com/xivdev/Penumbra/releases/download/0.4.7.7/Penumbra.zip",
-        "DownloadLinkTesting": "https://github.com/xivdev/Penumbra/releases/download/0.4.7.7/Penumbra.zip",
-        "DownloadLinkUpdate": "https://github.com/xivdev/Penumbra/releases/download/0.4.7.7/Penumbra.zip",
+        "DownloadLinkInstall": "https://github.com/Bluefissure/Penumbra/releases/download/v0.4.7.7.cn/Penumbra.zip",
+        "DownloadLinkTesting": "https://github.com/Bluefissure/Penumbra/releases/download/v0.4.7.7.cn/Penumbra.zip",
+        "DownloadLinkUpdate": "https://github.com/Bluefissure/Penumbra/releases/download/v0.4.7.7.cn/Penumbra.zip",
         "IconUrl": "https://raw.githubusercontent.com/xivdev/Penumbra/master/images/icon.png"
     }
 ]
