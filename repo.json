@@ -4,8 +4,8 @@
         "Name": "Penumbra",
         "Description": "Runtime mod loader and manager.",
         "InternalName": "Penumbra",
-        "AssemblyVersion": "0.4.7.7",
-        "TestingAssemblyVersion": "0.4.7.7",
+        "AssemblyVersion": "0.4.7.107",
+        "TestingAssemblyVersion": "0.4.7.107",
         "RepoUrl": "https://github.com/Bluefissure/Penumbra",
         "ApplicableVersion": "any",
         "DalamudApiLevel": 5,
@@ -14,9 +14,9 @@
         "DownloadCount": 0,
         "LastUpdate": 0,
         "LoadPriority": 69420,
-        "DownloadLinkInstall": "https://github.com/Bluefissure/Penumbra/releases/download/v0.4.7.7.cn/Penumbra.zip",
-        "DownloadLinkTesting": "https://github.com/Bluefissure/Penumbra/releases/download/v0.4.7.7.cn/Penumbra.zip",
-        "DownloadLinkUpdate": "https://github.com/Bluefissure/Penumbra/releases/download/v0.4.7.7.cn/Penumbra.zip",
+        "DownloadLinkInstall": "https://github.com/Bluefissure/Penumbra/releases/download/0.4.7.107/Penumbra.zip",
+        "DownloadLinkTesting": "https://github.com/Bluefissure/Penumbra/releases/download/0.4.7.107/Penumbra.zip",
+        "DownloadLinkUpdate": "https://github.com/Bluefissure/Penumbra/releases/download/0.4.7.107/Penumbra.zip",
         "IconUrl": "https://raw.githubusercontent.com/xivdev/Penumbra/master/images/icon.png"
     }
 ]
