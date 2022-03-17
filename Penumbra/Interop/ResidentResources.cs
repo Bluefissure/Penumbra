@@ -45,26 +45,26 @@ namespace Penumbra.Interop
             var module = Dalamud.SigScanner.Module.BaseAddress.ToInt64();
             var loadPlayerResourcesAddress =
                 Dalamud.SigScanner.ScanText(
-                    "E8 ?? ?? ?? ?? 48 8B 05 ?? ?? ?? ?? BA ?? ?? ?? ?? 41 B8 ?? ?? ?? ?? 48 8B 48 30 48 8B 01 FF 50 10 48 85 C0 74 0A" ); 
+                    "E8 ?? ?? ?? ?? 48 8B 05 ?? ?? ?? ?? BA ?? ?? ?? ?? 41 B8 ?? ?? ?? ?? 48 8B 48 30 48 8B 01 FF 50 10 48 85 C0 74 0A" );
             GeneralUtil.PrintDebugAddress( "LoadPlayerResources", loadPlayerResourcesAddress );
 
             var unloadPlayerResourcesAddress =
                 Dalamud.SigScanner.ScanText(
-                    "41 55 48 81 EC ?? ?? ?? ?? 48 8B 05 ?? ?? ?? ?? 48 33 C4 48 89 84 24 ?? ?? ?? ?? 4C 8B E9 48 83 C1 08" ); 
+                    "41 55 48 81 EC ?? ?? ?? ?? 48 8B 05 ?? ?? ?? ?? 48 33 C4 48 89 84 24 ?? ?? ?? ?? 4C 8B E9 48 83 C1 08" );
             GeneralUtil.PrintDebugAddress( "UnloadPlayerResources", unloadPlayerResourcesAddress );
 
-            var loadDataFilesAddress = Dalamud.SigScanner.ScanText( "E8 ?? ?? ?? 00 48 8D 8F ?? ?? 00 00 E8 ?? ?? ?? 00 33 D2" ); 
+            var loadDataFilesAddress = Dalamud.SigScanner.ScanText( "E8 ?? ?? ?? 00 48 8D 8F ?? ?? 00 00 E8 ?? ?? ?? 00 33 D2" );
             GeneralUtil.PrintDebugAddress( "LoadDataFiles", loadDataFilesAddress );
 
             var unloadCharacterResourceAddress =
-                Dalamud.SigScanner.ScanText( "E8 ?? ?? ?? FF 4C 89 37 48 83 C7 08 48 83 ED 01 75 ?? 48 8B CB" ); 
+                Dalamud.SigScanner.ScanText( "E8 ?? ?? ?? FF 4C 89 37 48 83 C7 08 48 83 ED 01 75 ?? 48 8B CB" );
             GeneralUtil.PrintDebugAddress( "UnloadCharacterResource", unloadCharacterResourceAddress );
 
-            _residentResourceManagerAddress = Dalamud.SigScanner.GetStaticAddressFromSig( "0F 44 FE 48 8B 0D ?? ?? ?? ?? 48 85 C9 74 05" ); 
+            _residentResourceManagerAddress = Dalamud.SigScanner.GetStaticAddressFromSig( "0F 44 FE 48 8B 0D ?? ?? ?? ?? 48 85 C9 74 05" );
             GeneralUtil.PrintDebugAddress( "ResidentResourceManager", _residentResourceManagerAddress );
 
             _characterUtilityAddress =
-                Dalamud.SigScanner.GetStaticAddressFromSig( "48 8B 0D ?? ?? ?? ?? E8 ?? ?? ?? 00 48 8D 8F ?? ?? 00 00 E8 ?? ?? ?? 00 33 D2" ); 
+                Dalamud.SigScanner.GetStaticAddressFromSig( "48 8B 0D ?? ?? ?? ?? E8 ?? ?? ?? 00 48 8D 8F ?? ?? 00 00 E8 ?? ?? ?? 00 33 D2" );
             GeneralUtil.PrintDebugAddress( "CharacterUtility", _characterUtilityAddress );
 
             LoadPlayerResources    = Marshal.GetDelegateForFunctionPointer< LoadPlayerResourcesPrototype >( loadPlayerResourcesAddress );
