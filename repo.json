@@ -4,8 +4,8 @@
         "Name": "Penumbra",
         "Description": "Runtime mod loader and manager.",
         "InternalName": "Penumbra",
-        "AssemblyVersion": "0.5.5.0",
-        "TestingAssemblyVersion": "0.5.5.0",
+        "AssemblyVersion": "0.5.5.101",
+        "TestingAssemblyVersion": "0.5.5.101",
         "RepoUrl": "https://github.com/Bluefissure/Penumbra",
         "ApplicableVersion": "any",
         "DalamudApiLevel": 6,
@@ -16,9 +16,9 @@
         "LoadPriority": 69420,
         "LoadRequiredState": 2,
         "LoadSync": true,
-        "DownloadLinkInstall": "https://github.com/Bluefissure/Penumbra/releases/download/0.5.5.100/Penumbra.zip",
-        "DownloadLinkTesting": "https://github.com/Bluefissure/Penumbra/releases/download/0.5.5.100/Penumbra.zip",
-        "DownloadLinkUpdate": "https://github.com/Bluefissure/Penumbra/releases/download/0.5.5.100/Penumbra.zip",
+        "DownloadLinkInstall": "https://github.com/Bluefissure/Penumbra/releases/download/0.5.5.101/Penumbra.zip",
+        "DownloadLinkTesting": "https://github.com/Bluefissure/Penumbra/releases/download/0.5.5.101/Penumbra.zip",
+        "DownloadLinkUpdate": "https://github.com/Bluefissure/Penumbra/releases/download/0.5.5.101/Penumbra.zip",
         "IconUrl": "https://raw.githubusercontent.com/Bluefissure/Penumbra/master/images/icon.png"
     }
 ]
