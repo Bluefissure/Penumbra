@@ -4,32 +4,43 @@ using EmbedIO.Routing;
 using EmbedIO.WebApi;
 using Penumbra.GameData.Enums;
 
-namespace Penumbra.Api
+namespace Penumbra.Api;
+
+public class RedrawController : WebApiController
 {
-    public class RedrawController : WebApiController
+    private readonly Penumbra _penumbra;
+
+    public RedrawController( Penumbra penumbra )
+        => _penumbra = penumbra;
+
+    [Route( HttpVerbs.Post, "/redraw" )]
+    public async Task Redraw()
     {
-        private readonly Penumbra _penumbra;
-
-        public RedrawController( Penumbra penumbra )
-            => _penumbra = penumbra;
-
-        [Route( HttpVerbs.Post, "/redraw" )]
-        public async Task Redraw()
+        var data = await HttpContext.GetRequestDataAsync< RedrawData >();
+        if( data.ObjectTableIndex >= 0 )
         {
-            RedrawData data = await HttpContext.GetRequestDataAsync<RedrawData>();
+            _penumbra.Api.RedrawObject( data.ObjectTableIndex, data.Type );
+        }
+        else if( data.Name.Length > 0 )
+        {
             _penumbra.Api.RedrawObject( data.Name, data.Type );
         }
-
-        [Route( HttpVerbs.Post, "/redrawAll" )]
-        public void RedrawAll()
+        else
         {
-            _penumbra.Api.RedrawAll(RedrawType.WithoutSettings);
+            _penumbra.Api.RedrawAll( data.Type );
         }
+    }
 
-        public class RedrawData
-        {
-            public string Name { get; set; } = string.Empty;
-            public RedrawType Type { get; set; } = RedrawType.WithSettings;
-        }
+    [Route( HttpVerbs.Post, "/redrawAll" )]
+    public void RedrawAll()
+    {
+        _penumbra.Api.RedrawAll( RedrawType.Redraw );
+    }
+
+    public class RedrawData
+    {
+        public string Name { get; set; } = string.Empty;
+        public RedrawType Type { get; set; } = RedrawType.Redraw;
+        public int ObjectTableIndex { get; set; } = -1;
     }
 }

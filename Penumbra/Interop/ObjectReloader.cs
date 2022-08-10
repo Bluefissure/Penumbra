@@ -1,445 +1,367 @@
 using System;
 using System.Collections.Generic;
-using System.ComponentModel;
 using System.Linq;
-using System.Runtime.InteropServices;
-using System.Threading.Tasks;
 using Dalamud.Game.ClientState.Conditions;
+using Dalamud.Game.ClientState.Objects.Enums;
+using Dalamud.Game.ClientState.Objects.SubKinds;
 using Dalamud.Game.ClientState.Objects.Types;
+using Penumbra.Api;
 using Penumbra.GameData.Enums;
-using Penumbra.Mods;
+using Penumbra.Interop.Structs;
 
-namespace Penumbra.Interop
+namespace Penumbra.Interop;
+
+public unsafe partial class ObjectReloader
 {
-    public class ObjectReloader : IDisposable
+    public const int GPosePlayerIdx = 201;
+    public const int GPoseSlots     = 42;
+    public const int GPoseEndIdx    = GPosePlayerIdx + GPoseSlots;
+
+    private readonly string?[] _gPoseNames       = new string?[GPoseSlots];
+    private          int       _gPoseNameCounter = 0;
+    private          bool      _inGPose          = false;
+
+    // VFuncs that disable and enable draw, used only for GPose actors.
+    private static void DisableDraw( GameObject actor )
+        => ( ( delegate* unmanaged< IntPtr, void >** )actor.Address )[ 0 ][ 17 ]( actor.Address );
+
+    private static void EnableDraw( GameObject actor )
+        => ( ( delegate* unmanaged< IntPtr, void >** )actor.Address )[ 0 ][ 16 ]( actor.Address );
+
+    // Check whether we currently are in GPose.
+    // Also clear the name list.
+    private void SetGPose()
     {
-        private delegate void ManipulateDraw( IntPtr actor );
+        _inGPose          = Dalamud.Objects[ GPosePlayerIdx ] != null;
+        _gPoseNameCounter = 0;
+    }
 
-        [Flags]
-        public enum LoadingFlags : int
+    private static bool IsGPoseActor( int idx )
+        => idx is >= GPosePlayerIdx and < GPoseEndIdx;
+
+    // Return whether an object has to be replaced by a GPose object.
+    // If the object does not exist, is already a GPose actor
+    // or no actor of the same name is found in the GPose actor list,
+    // obj will be the object itself (or null) and false will be returned.
+    // If we are in GPose and a game object with the same name as the original actor is found,
+    // this will be in obj and true will be returned.
+    private bool FindCorrectActor( int idx, out GameObject? obj )
+    {
+        obj = Dalamud.Objects[ idx ];
+        if( !_inGPose || obj == null || IsGPoseActor( idx ) )
         {
-            Invisibility      = 0x00_00_00_02,
-            IsLoading         = 0x00_00_08_00,
-            SomeNpcFlag       = 0x00_00_01_00,
-            MaybeCulled       = 0x00_00_04_00,
-            MaybeHiddenMinion = 0x00_00_80_00,
-            MaybeHiddenSummon = 0x00_80_00_00,
-        }
-
-        private const int  RenderModeOffset     = 0x0104;
-        private const int  UnloadAllRedrawDelay = 250;
-        private const uint NpcObjectId          = unchecked( ( uint )-536870912 );
-        public const  int  GPosePlayerIdx       = 201;
-        public const  int  GPoseEndIdx          = GPosePlayerIdx + 48;
-
-        private readonly ModManager                                         _mods;
-        private readonly Queue< (uint actorId, string name, RedrawType s) > _actorIds = new();
-
-        internal int DefaultWaitFrames;
-
-        private int          _waitFrames;
-        private int          _currentFrame;
-        private bool         _changedSettings;
-        private uint         _currentObjectId         = uint.MaxValue;
-        private LoadingFlags _currentObjectStartState = 0;
-        private RedrawType   _currentRedrawType       = RedrawType.Unload;
-        private string?      _currentObjectName;
-        private bool         _wasTarget;
-        private bool         _inGPose;
-
-        public static IntPtr RenderPtr( GameObject actor )
-            => actor.Address + RenderModeOffset;
-
-        public ObjectReloader( ModManager mods, int defaultWaitFrames )
-        {
-            _mods             = mods;
-            DefaultWaitFrames = defaultWaitFrames;
-        }
-
-        private void ChangeSettings()
-        {
-            if( _currentObjectName != null && _mods.Collections.CharacterCollection.TryGetValue( _currentObjectName, out var collection ) )
-            {
-                _changedSettings                   = true;
-                _mods.Collections.SetActiveCollection( collection, _currentObjectName );
-            }
-        }
-
-        private void RestoreSettings()
-        {
-            _mods.Collections.ResetActiveCollection();
-            _changedSettings                   = false;
-        }
-
-        private unsafe void WriteInvisible( GameObject actor, int actorIdx )
-        {
-            var renderPtr = RenderPtr( actor );
-            if( renderPtr == IntPtr.Zero )
-            {
-                return;
-            }
-
-            _currentObjectStartState    =  *( LoadingFlags* )renderPtr;
-            *( LoadingFlags* )renderPtr |= LoadingFlags.Invisibility;
-
-            if( _inGPose )
-            {
-                var ptr         = ( void*** )actor.Address;
-                var disableDraw = Marshal.GetDelegateForFunctionPointer< ManipulateDraw >( new IntPtr( ptr[ 0 ][ 18 ] ) );
-                disableDraw( actor.Address );
-            }
-        }
-
-        private unsafe bool StillLoading( IntPtr renderPtr )
-        {
-            const LoadingFlags stillLoadingFlags = LoadingFlags.SomeNpcFlag
-              | LoadingFlags.MaybeCulled
-              | LoadingFlags.MaybeHiddenMinion
-              | LoadingFlags.MaybeHiddenSummon;
-
-            if( renderPtr != IntPtr.Zero )
-            {
-                var loadingFlags = *( LoadingFlags* )renderPtr;
-                if( loadingFlags == _currentObjectStartState )
-                {
-                    return false;
-                }
-
-                return !( loadingFlags == 0 || ( loadingFlags & stillLoadingFlags ) != 0 );
-            }
-
             return false;
         }
 
-        private unsafe void WriteVisible( GameObject actor, int actorIdx )
+        var name = obj.Name.ToString();
+        for( var i = 0; i < _gPoseNameCounter; ++i )
         {
-            var renderPtr = RenderPtr( actor );
-            *( LoadingFlags* )renderPtr &= ~LoadingFlags.Invisibility;
-
-            if( _inGPose )
+            var gPoseName = _gPoseNames[ i ];
+            if( gPoseName == null )
             {
-                var ptr        = ( void*** )actor.Address;
-                var enableDraw = Marshal.GetDelegateForFunctionPointer< ManipulateDraw >( new IntPtr( ptr[ 0 ][ 17 ] ) );
-                enableDraw( actor.Address );
-            }
-        }
-
-        private bool CheckObject( GameObject actor )
-        {
-            if( _currentObjectId != actor.ObjectId )
-            {
-                return false;
+                break;
             }
 
-            if( _currentObjectId != NpcObjectId )
+            if( name == gPoseName )
             {
+                obj = Dalamud.Objects[ GPosePlayerIdx + i ];
                 return true;
             }
-
-            return _currentObjectName == actor.Name.ToString();
         }
 
-        private bool CheckObjectGPose( GameObject actor )
-            => actor.ObjectId == NpcObjectId && _currentObjectName == actor.Name.ToString();
-
-        private (GameObject?, int) FindCurrentObject()
+        for( ; _gPoseNameCounter < GPoseSlots; ++_gPoseNameCounter )
         {
-            if( _inGPose )
+            var gPoseName = Dalamud.Objects[ GPosePlayerIdx + _gPoseNameCounter ]?.Name.ToString();
+            _gPoseNames[ _gPoseNameCounter ] = gPoseName;
+            if( gPoseName == null )
             {
-                for( var i = GPosePlayerIdx; i < GPoseEndIdx; ++i )
-                {
-                    var actor = Dalamud.Objects[ i ];
-                    if( actor == null )
-                    {
-                        break;
-                    }
-
-                    if( CheckObjectGPose( actor ) )
-                    {
-                        return ( actor, i );
-                    }
-                }
+                break;
             }
 
-            for( var i = 0; i < Dalamud.Objects.Length; ++i )
+            if( name == gPoseName )
             {
-                if( i == GPosePlayerIdx )
-                {
-                    i = GPoseEndIdx;
-                }
-
-                var actor = Dalamud.Objects[ i ];
-                if( actor != null && CheckObject( actor ) )
-                {
-                    return ( actor, i );
-                }
+                obj = Dalamud.Objects[ GPosePlayerIdx + _gPoseNameCounter ];
+                return true;
             }
-
-            return ( null, -1 );
         }
 
-        private void PopObject()
+        return obj;
+    }
+
+    // Do not ever redraw any of the five UI Window actors.
+    private static bool BadRedrawIndices( GameObject? actor, out int tableIndex )
+    {
+        if( actor == null )
         {
-            if( _actorIds.Count > 0 )
+            tableIndex = -1;
+            return true;
+        }
+
+        tableIndex = ObjectTableIndex( actor );
+        return tableIndex is >= 240 and < 245;
+    }
+}
+
+public sealed unsafe partial class ObjectReloader : IDisposable
+{
+    private readonly List< int > _queue           = new(100);
+    private readonly List< int > _afterGPoseQueue = new(GPoseSlots);
+    private          int         _target          = -1;
+
+    public event GameObjectRedrawn? GameObjectRedrawn;
+
+    public ObjectReloader()
+        => Dalamud.Framework.Update += OnUpdateEvent;
+
+    public void Dispose()
+        => Dalamud.Framework.Update -= OnUpdateEvent;
+
+    public static DrawState* ActorDrawState( GameObject actor )
+        => ( DrawState* )( actor.Address + 0x0104 );
+
+    private static int ObjectTableIndex( GameObject actor )
+        => ( ( FFXIVClientStructs.FFXIV.Client.Game.Object.GameObject* )actor.Address )->ObjectIndex;
+
+    private static void WriteInvisible( GameObject? actor )
+    {
+        if( BadRedrawIndices( actor, out var tableIndex ) )
+        {
+            return;
+        }
+
+        *ActorDrawState( actor! ) |= DrawState.Invisibility;
+
+        var gPose = IsGPoseActor( tableIndex );
+        if( gPose )
+        {
+            DisableDraw( actor! );
+        }
+
+        if( actor is PlayerCharacter && Dalamud.Objects[ tableIndex + 1 ] is { ObjectKind: ObjectKind.MountType } mount )
+        {
+            *ActorDrawState( mount ) |= DrawState.Invisibility;
+            if( gPose )
             {
-                var (id, name, s)  = _actorIds.Dequeue();
-                _currentObjectName = name;
-                _currentObjectId   = id;
-                _currentRedrawType = s;
-                var (actor, _)     = FindCurrentObject();
-                if( actor == null )
+                DisableDraw( mount );
+            }
+        }
+    }
+
+    private void WriteVisible( GameObject? actor )
+    {
+        if( BadRedrawIndices( actor, out var tableIndex ) )
+        {
+            return;
+        }
+
+        *ActorDrawState( actor! ) &= ~DrawState.Invisibility;
+
+        var gPose = IsGPoseActor( tableIndex );
+        if( gPose )
+        {
+            EnableDraw( actor! );
+        }
+
+        if( actor is PlayerCharacter && Dalamud.Objects[ tableIndex + 1 ] is { ObjectKind: ObjectKind.MountType } mount )
+        {
+            *ActorDrawState( mount ) &= ~DrawState.Invisibility;
+            if( gPose )
+            {
+                EnableDraw( mount );
+            }
+        }
+
+        GameObjectRedrawn?.Invoke( actor!.Address, tableIndex );
+    }
+
+    private void ReloadActor( GameObject? actor )
+    {
+        if( BadRedrawIndices( actor, out var tableIndex ) )
+        {
+            return;
+        }
+
+        if( actor!.Address == Dalamud.Targets.Target?.Address )
+        {
+            _target = tableIndex;
+        }
+
+        _queue.Add( ~tableIndex );
+    }
+
+    private void ReloadActorAfterGPose( GameObject? actor )
+    {
+        if( Dalamud.Objects[ GPosePlayerIdx ] != null )
+        {
+            ReloadActor( actor );
+            return;
+        }
+
+        if( actor != null )
+        {
+            WriteInvisible( actor );
+            _afterGPoseQueue.Add( ~ObjectTableIndex( actor ) );
+        }
+    }
+
+    private void HandleTarget()
+    {
+        if( _target < 0 )
+        {
+            return;
+        }
+
+        var actor = Dalamud.Objects[ _target ];
+        if( actor == null || Dalamud.Targets.Target != null )
+        {
+            return;
+        }
+
+        Dalamud.Targets.SetTarget( actor );
+        _target = -1;
+    }
+
+    private void HandleRedraw()
+    {
+        if( _queue.Count == 0 )
+        {
+            return;
+        }
+
+        var numKept = 0;
+        for( var i = 0; i < _queue.Count; ++i )
+        {
+            var idx = _queue[ i ];
+            if( FindCorrectActor( idx < 0 ? ~idx : idx, out var obj ) )
+            {
+                _afterGPoseQueue.Add( idx < 0 ? idx : ~idx );
+            }
+
+            if( obj != null )
+            {
+                if( idx < 0 )
                 {
-                    return;
+                    WriteInvisible( obj );
+                    _queue[ numKept++ ] = ObjectTableIndex( obj );
                 }
+                else
+                {
+                    WriteVisible( obj );
+                }
+            }
+        }
 
-                _wasTarget = actor.Address == Dalamud.Targets.Target?.Address;
+        _queue.RemoveRange( numKept, _queue.Count - numKept );
+    }
 
-                ++_currentFrame;
+    private void HandleAfterGPose()
+    {
+        if( _afterGPoseQueue.Count == 0 || _inGPose )
+        {
+            return;
+        }
+
+        var numKept = 0;
+        for( var i = 0; i < _afterGPoseQueue.Count; ++i )
+        {
+            var idx = _afterGPoseQueue[ i ];
+            if( idx < 0 )
+            {
+                var newIdx = ~idx;
+                WriteInvisible( Dalamud.Objects[ newIdx ] );
+                _afterGPoseQueue[ numKept++ ] = newIdx;
             }
             else
             {
-                Dalamud.Framework.Update -= OnUpdateEvent;
+                WriteVisible( Dalamud.Objects[ idx ] );
             }
         }
 
-        private void ApplySettingsOrRedraw()
+        _afterGPoseQueue.RemoveRange( numKept, _afterGPoseQueue.Count - numKept );
+    }
+
+    private void OnUpdateEvent( object framework )
+    {
+        if( Dalamud.Conditions[ ConditionFlag.BetweenAreas51 ]
+        || Dalamud.Conditions[ ConditionFlag.BetweenAreas ]
+        || Dalamud.Conditions[ ConditionFlag.OccupiedInCutSceneEvent ] )
         {
-            var (actor, idx) = FindCurrentObject();
-            if( actor == null )
-            {
-                _currentFrame = 0;
-                return;
-            }
-
-            switch( _currentRedrawType )
-            {
-                case RedrawType.Unload:
-                    WriteInvisible( actor, idx );
-                    _currentFrame = 0;
-                    break;
-                case RedrawType.RedrawWithSettings:
-                    ChangeSettings();
-                    ++_currentFrame;
-                    break;
-                case RedrawType.RedrawWithoutSettings:
-                    WriteVisible( actor, idx );
-                    _currentFrame = 0;
-                    break;
-                case RedrawType.WithoutSettings:
-                    WriteInvisible( actor, idx );
-                    ++_currentFrame;
-                    break;
-                case RedrawType.WithSettings:
-                    ChangeSettings();
-                    WriteInvisible( actor, idx );
-                    ++_currentFrame;
-                    break;
-                case RedrawType.OnlyWithSettings:
-                    ChangeSettings();
-                    if( !_changedSettings )
-                    {
-                        return;
-                    }
-
-                    WriteInvisible( actor, idx );
-                    ++_currentFrame;
-                    break;
-                case RedrawType.AfterGPoseWithSettings:
-                case RedrawType.AfterGPoseWithoutSettings:
-                    if( _inGPose )
-                    {
-                        _actorIds.Enqueue( ( _currentObjectId, _currentObjectName!, _currentRedrawType ) );
-                        _currentFrame = 0;
-                    }
-                    else
-                    {
-                        _currentRedrawType = _currentRedrawType == RedrawType.AfterGPoseWithSettings
-                            ? RedrawType.WithSettings
-                            : RedrawType.WithoutSettings;
-                    }
-
-                    break;
-                default: throw new InvalidEnumArgumentException();
-            }
+            return;
         }
 
-        private void StartRedrawAndWait()
-        {
-            var (actor, idx) = FindCurrentObject();
-            if( actor == null )
-            {
-                RevertSettings();
-                return;
-            }
+        SetGPose();
+        HandleRedraw();
+        HandleAfterGPose();
+        HandleTarget();
+    }
 
-            WriteVisible( actor, idx );
-            _currentFrame = _changedSettings || _wasTarget ? _currentFrame + 1 : 0;
+    public void RedrawObject( GameObject? actor, RedrawType settings )
+    {
+        switch( settings )
+        {
+            case RedrawType.Redraw:
+                ReloadActor( actor );
+                break;
+            case RedrawType.AfterGPose:
+                ReloadActorAfterGPose( actor );
+                break;
+            default: throw new ArgumentOutOfRangeException( nameof( settings ), settings, null );
         }
+    }
 
-        private void RevertSettings()
+    private static GameObject? GetLocalPlayer()
+    {
+        var gPosePlayer = Dalamud.Objects[ GPosePlayerIdx ];
+        return gPosePlayer ?? Dalamud.Objects[ 0 ];
+    }
+
+    private static bool GetName( string lowerName, out GameObject? actor )
+    {
+        ( actor, var ret ) = lowerName switch
         {
-            var (actor, _) = FindCurrentObject();
-            if( actor != null )
-            {
-                if( !StillLoading( RenderPtr( actor ) ) )
-                {
-                    RestoreSettings();
-                    if( _wasTarget && Dalamud.Targets.Target == null )
-                    {
-                        Dalamud.Targets.SetTarget( actor );
-                    }
+            ""          => ( null, true ),
+            "<me>"      => ( GetLocalPlayer(), true ),
+            "self"      => ( GetLocalPlayer(), true ),
+            "<t>"       => ( Dalamud.Targets.Target, true ),
+            "target"    => ( Dalamud.Targets.Target, true ),
+            "<f>"       => ( Dalamud.Targets.FocusTarget, true ),
+            "focus"     => ( Dalamud.Targets.FocusTarget, true ),
+            "<mo>"      => ( Dalamud.Targets.MouseOverTarget, true ),
+            "mouseover" => ( Dalamud.Targets.MouseOverTarget, true ),
+            _           => ( null, false ),
+        };
+        return ret;
+    }
 
-                    _currentFrame = 0;
-                }
-            }
-            else
-            {
-                _currentFrame = 0;
-            }
+    public void RedrawObject( int tableIndex, RedrawType settings )
+    {
+        if( tableIndex >= 0 && tableIndex < Dalamud.Objects.Length )
+        {
+            RedrawObject( Dalamud.Objects[ tableIndex ], settings );
         }
+    }
 
-        private void OnUpdateEvent( object framework )
+    public void RedrawObject( string name, RedrawType settings )
+    {
+        var lowerName = name.ToLowerInvariant();
+        if( GetName( lowerName, out var target ) )
         {
-            if( Dalamud.Conditions[ ConditionFlag.BetweenAreas51 ]
-             || Dalamud.Conditions[ ConditionFlag.BetweenAreas ]
-             || Dalamud.Conditions[ ConditionFlag.OccupiedInCutSceneEvent ] )
-            {
-                _waitFrames = DefaultWaitFrames;
-                return;
-            }
-
-            if( _waitFrames > 0 )
-            {
-                --_waitFrames;
-                return;
-            }
-
-            _inGPose = Dalamud.Objects[ GPosePlayerIdx ] != null;
-
-            switch( _currentFrame )
-            {
-                case 0:
-                    PopObject();
-                    break;
-                case 1:
-                    ApplySettingsOrRedraw();
-                    break;
-                case 2:
-                    StartRedrawAndWait();
-                    break;
-                case 3:
-                    RevertSettings();
-                    break;
-                default:
-                    _currentFrame = 0;
-                    break;
-            }
+            RedrawObject( target, settings );
         }
-
-        private void RedrawObjectIntern( uint objectId, string actorName, RedrawType settings )
+        else
         {
-            if( _actorIds.Contains( ( objectId, actorName, settings ) ) )
-            {
-                return;
-            }
-
-            _actorIds.Enqueue( ( objectId, actorName, settings ) );
-            if( _actorIds.Count == 1 )
-            {
-                Dalamud.Framework.Update += OnUpdateEvent;
-            }
-        }
-
-        public void RedrawObject( GameObject? actor, RedrawType settings = RedrawType.WithSettings )
-        {
-            if( actor != null )
-            {
-                RedrawObjectIntern( actor.ObjectId, actor.Name.ToString(), settings );
-            }
-        }
-
-        private GameObject? GetLocalPlayer()
-        {
-            var gPosePlayer = Dalamud.Objects[ GPosePlayerIdx ];
-            return gPosePlayer ?? Dalamud.Objects[ 0 ];
-        }
-
-        private GameObject? GetName( string name )
-        {
-            var lowerName = name.ToLowerInvariant();
-            return lowerName switch
-            {
-                ""          => null,
-                "<me>"      => GetLocalPlayer(),
-                "self"      => GetLocalPlayer(),
-                "<t>"       => Dalamud.Targets.Target,
-                "target"    => Dalamud.Targets.Target,
-                "<f>"       => Dalamud.Targets.FocusTarget,
-                "focus"     => Dalamud.Targets.FocusTarget,
-                "<mo>"      => Dalamud.Targets.MouseOverTarget,
-                "mouseover" => Dalamud.Targets.MouseOverTarget,
-                _ => Dalamud.Objects.FirstOrDefault(
-                    a => string.Equals( a.Name.ToString(), lowerName, StringComparison.InvariantCultureIgnoreCase ) ),
-            };
-        }
-
-        public void RedrawObject( string name, RedrawType settings = RedrawType.WithSettings )
-            => RedrawObject( GetName( name ), settings );
-
-        public void RedrawAll( RedrawType settings = RedrawType.WithSettings )
-        {
-            Clear();
-            foreach( var actor in Dalamud.Objects )
+            foreach( var actor in Dalamud.Objects.Where( a => a.Name.ToString().ToLowerInvariant() == lowerName ) )
             {
                 RedrawObject( actor, settings );
             }
         }
+    }
 
-        private void UnloadAll()
+    public void RedrawAll( RedrawType settings )
+    {
+        foreach( var actor in Dalamud.Objects )
         {
-            Clear();
-            foreach( var (actor, index) in Dalamud.Objects.Select( ( a, i ) => ( a, i ) ) )
-            {
-                WriteInvisible( actor, index );
-            }
-        }
-
-        private void RedrawAllWithoutSettings()
-        {
-            Clear();
-            foreach( var (actor, index) in Dalamud.Objects.Select( ( a, i ) => ( a, i ) ) )
-            {
-                WriteVisible( actor, index );
-            }
-        }
-
-        public async void UnloadAtOnceRedrawWithSettings()
-        {
-            Clear();
-            UnloadAll();
-            await Task.Delay( UnloadAllRedrawDelay );
-            RedrawAll( RedrawType.RedrawWithSettings );
-        }
-
-        public async void UnloadAtOnceRedrawWithoutSettings()
-        {
-            Clear();
-            UnloadAll();
-            await Task.Delay( UnloadAllRedrawDelay );
-            RedrawAllWithoutSettings();
-        }
-
-        public void Clear()
-        {
-            RestoreSettings();
-            _currentFrame = 0;
-        }
-
-        public void Dispose()
-        {
-            RevertSettings();
-            _actorIds.Clear();
-            Dalamud.Framework.Update -= OnUpdateEvent;
+            RedrawObject( actor, settings );
         }
     }
 }

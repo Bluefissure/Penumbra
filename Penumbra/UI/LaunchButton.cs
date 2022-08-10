@@ -5,38 +5,44 @@ using ImGuiScene;
 
 namespace Penumbra.UI;
 
-public partial class SettingsInterface
+// A Launch Button used in the title screen of the game,
+// using the Dalamud-provided collapsible submenu.
+public class LaunchButton : IDisposable
 {
-    private class ManageModsButton : IDisposable
+    private readonly ConfigWindow                          _configWindow;
+    private          TextureWrap?                          _icon;
+    private          TitleScreenMenu.TitleScreenMenuEntry? _entry;
+
+    public LaunchButton( ConfigWindow ui )
     {
-        private readonly SettingsInterface                     _base;
-        private readonly TextureWrap?                          _icon;
-        private readonly TitleScreenMenu.TitleScreenMenuEntry? _entry;
+        _configWindow = ui;
+        _icon         = null;
+        _entry        = null;
 
-        public ManageModsButton( SettingsInterface ui )
+        void CreateEntry()
         {
-            _base  = ui;
-
             _icon = Dalamud.PluginInterface.UiBuilder.LoadImage( Path.Combine( Dalamud.PluginInterface.AssemblyLocation.DirectoryName!,
                 "tsmLogo.png" ) );
             if( _icon != null )
             {
                 _entry = Dalamud.TitleScreenMenu.AddEntry( "Manage Penumbra", _icon, OnTriggered );
             }
+
+            Dalamud.PluginInterface.UiBuilder.Draw -= CreateEntry;
         }
 
-        private void OnTriggered()
-        {
-            _base.FlipVisibility();
-        }
+        Dalamud.PluginInterface.UiBuilder.Draw += CreateEntry;
+    }
 
-        public void Dispose()
+    private void OnTriggered()
+        => _configWindow.Toggle();
+
+    public void Dispose()
+    {
+        _icon?.Dispose();
+        if( _entry != null )
         {
-            _icon?.Dispose();
-            if( _entry != null )
-            {
-                Dalamud.TitleScreenMenu.RemoveEntry( _entry );
-            }
+            Dalamud.TitleScreenMenu.RemoveEntry( _entry );
         }
     }
 }
