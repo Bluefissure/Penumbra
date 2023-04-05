@@ -13,6 +13,7 @@ using System.Diagnostics.CodeAnalysis;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using System.Runtime.CompilerServices;
 using Penumbra.Api.Enums;
 using Penumbra.GameData.Actors;
 using Penumbra.String;
@@ -23,7 +24,7 @@ namespace Penumbra.Api;
 public class PenumbraApi : IDisposable, IPenumbraApi
 {
     public (int, int) ApiVersion
-        => ( 4, 17 );
+        => ( 4, 19 );
 
     private Penumbra?        _penumbra;
     private Lumina.GameData? _lumina;
@@ -170,6 +171,52 @@ public class PenumbraApi : IDisposable, IPenumbraApi
     public event ChangedItemHover? ChangedItemTooltip;
     public event GameObjectResourceResolvedDelegate? GameObjectResourceResolved;
 
+    public PenumbraApiEc OpenMainWindow( TabType tab, string modDirectory, string modName )
+    {
+        CheckInitialized();
+        if( _penumbra!.ConfigWindow == null )
+        {
+            return PenumbraApiEc.SystemDisposed;
+        }
+
+        _penumbra!.ConfigWindow.IsOpen = true;
+
+        if( !Enum.IsDefined( tab ) )
+        {
+            return PenumbraApiEc.InvalidArgument;
+        }
+
+        if( tab != TabType.None )
+        {
+            _penumbra!.ConfigWindow.SelectTab = tab;
+        }
+
+        if( tab == TabType.Mods && ( modDirectory.Length > 0 || modName.Length > 0 ) )
+        {
+            if( Penumbra.ModManager.TryGetMod( modDirectory, modName, out var mod ) )
+            {
+                _penumbra!.ConfigWindow.SelectMod( mod );
+            }
+            else
+            {
+                return PenumbraApiEc.ModMissing;
+            }
+        }
+
+        return PenumbraApiEc.Success;
+    }
+
+    public void CloseMainWindow()
+    {
+        CheckInitialized();
+        if( _penumbra!.ConfigWindow == null )
+        {
+            return;
+        }
+
+        _penumbra!.ConfigWindow.IsOpen = false;
+    }
+
     public void RedrawObject( int tableIndex, RedrawType setting )
     {
         CheckInitialized();
@@ -271,6 +318,20 @@ public class PenumbraApi : IDisposable, IPenumbraApi
         return ret.Select( r => r.ToString() ).ToArray();
     }
 
+    public (string[], string[][]) ResolvePlayerPaths( string[] forward, string[] reverse )
+    {
+        CheckInitialized();
+        if( !Penumbra.Config.EnableMods )
+        {
+            return ( forward, reverse.Select( p => new[] { p } ).ToArray() );
+        }
+
+        var playerCollection = PathResolver.PlayerCollection();
+        var resolved         = forward.Select( p => ResolvePath( p, Penumbra.ModManager, playerCollection ) ).ToArray();
+        var reverseResolved  = playerCollection.ReverseResolvePaths( reverse );
+        return ( resolved, reverseResolved.Select( a => a.Select( p => p.ToString() ).ToArray() ).ToArray() );
+    }
+
     public T? GetFile< T >( string gamePath ) where T : FileResource
         => GetFileIntern< T >( ResolveDefaultPath( gamePath ) );
 
@@ -302,10 +363,141 @@ public class PenumbraApi : IDisposable, IPenumbraApi
         }
     }
 
+    public string GetCollectionForType( ApiCollectionType type )
+    {
+        CheckInitialized();
+        if( !Enum.IsDefined( type ) )
+        {
+            return string.Empty;
+        }
+
+        var collection = Penumbra.CollectionManager.ByType( ( CollectionType )type );
+        return collection?.Name ?? string.Empty;
+    }
+
+    public (PenumbraApiEc, string OldCollection) SetCollectionForType( ApiCollectionType type, string collectionName, bool allowCreateNew, bool allowDelete )
+    {
+        CheckInitialized();
+        if( !Enum.IsDefined( type ) )
+        {
+            return ( PenumbraApiEc.InvalidArgument, string.Empty );
+        }
+
+        var oldCollection = Penumbra.CollectionManager.ByType( ( CollectionType )type )?.Name ?? string.Empty;
+
+        if( collectionName.Length == 0 )
+        {
+            if( oldCollection.Length == 0 )
+            {
+                return ( PenumbraApiEc.NothingChanged, oldCollection );
+            }
+
+            if( !allowDelete || type is ApiCollectionType.Current or ApiCollectionType.Default or ApiCollectionType.Interface )
+            {
+                return ( PenumbraApiEc.AssignmentDeletionDisallowed, oldCollection );
+            }
+
+            Penumbra.CollectionManager.RemoveSpecialCollection( ( CollectionType )type );
+            return ( PenumbraApiEc.Success, oldCollection );
+        }
+
+        if( !Penumbra.CollectionManager.ByName( collectionName, out var collection ) )
+        {
+            return ( PenumbraApiEc.CollectionMissing, oldCollection );
+        }
+
+        if( oldCollection.Length == 0 )
+        {
+            if( !allowCreateNew )
+            {
+                return ( PenumbraApiEc.AssignmentCreationDisallowed, oldCollection );
+            }
+
+            Penumbra.CollectionManager.CreateSpecialCollection( ( CollectionType )type );
+        }
+        else if( oldCollection == collection.Name )
+        {
+            return ( PenumbraApiEc.NothingChanged, oldCollection );
+        }
+
+        Penumbra.CollectionManager.SetCollection( collection, ( CollectionType )type );
+        return ( PenumbraApiEc.Success, oldCollection );
+    }
+
+    public (bool ObjectValid, bool IndividualSet, string EffectiveCollection) GetCollectionForObject( int gameObjectIdx )
+    {
+        CheckInitialized();
+        var id = AssociatedIdentifier( gameObjectIdx );
+        if( !id.IsValid )
+        {
+            return ( false, false, Penumbra.CollectionManager.Default.Name );
+        }
+
+        if( Penumbra.CollectionManager.Individuals.Individuals.TryGetValue( id, out var collection ) )
+        {
+            return ( true, true, collection.Name );
+        }
+
+        AssociatedCollection( gameObjectIdx, out collection );
+        return ( true, false, collection.Name );
+    }
+
+    public (PenumbraApiEc, string OldCollection) SetCollectionForObject( int gameObjectIdx, string collectionName, bool allowCreateNew, bool allowDelete )
+    {
+        CheckInitialized();
+        var id = AssociatedIdentifier( gameObjectIdx );
+        if( !id.IsValid )
+        {
+            return ( PenumbraApiEc.InvalidIdentifier, Penumbra.CollectionManager.Default.Name );
+        }
+
+        var oldCollection = Penumbra.CollectionManager.Individuals.Individuals.TryGetValue( id, out var c ) ? c.Name : string.Empty;
+
+        if( collectionName.Length == 0 )
+        {
+            if( oldCollection.Length == 0 )
+            {
+                return ( PenumbraApiEc.NothingChanged, oldCollection );
+            }
+
+            if( !allowDelete )
+            {
+                return ( PenumbraApiEc.AssignmentDeletionDisallowed, oldCollection );
+            }
+
+            var idx = Penumbra.CollectionManager.Individuals.Index( id );
+            Penumbra.CollectionManager.RemoveIndividualCollection( idx );
+            return ( PenumbraApiEc.Success, oldCollection );
+        }
+
+        if( !Penumbra.CollectionManager.ByName( collectionName, out var collection ) )
+        {
+            return ( PenumbraApiEc.CollectionMissing, oldCollection );
+        }
+
+        if( oldCollection.Length == 0 )
+        {
+            if( !allowCreateNew )
+            {
+                return ( PenumbraApiEc.AssignmentCreationDisallowed, oldCollection );
+            }
+
+            var ids = Penumbra.CollectionManager.Individuals.GetGroup( id );
+            Penumbra.CollectionManager.CreateIndividualCollection( ids );
+        }
+        else if( oldCollection == collection.Name )
+        {
+            return ( PenumbraApiEc.NothingChanged, oldCollection );
+        }
+
+        Penumbra.CollectionManager.SetCollection( collection, CollectionType.Individual, Penumbra.CollectionManager.Individuals.Index( id ) );
+        return ( PenumbraApiEc.Success, oldCollection );
+    }
+
     public IList< string > GetCollections()
     {
         CheckInitialized();
-        return Penumbra.CollectionManager.Skip( 1 ).Select( c => c.Name ).ToArray();
+        return Penumbra.CollectionManager.Select( c => c.Name ).ToArray();
     }
 
     public string GetCurrentCollection()
@@ -683,7 +875,7 @@ public class PenumbraApi : IDisposable, IPenumbraApi
     public PenumbraApiEc CreateNamedTemporaryCollection( string name )
     {
         CheckInitialized();
-        if( name.Length == 0 || Mod.ReplaceBadXivSymbols( name ) != name )
+        if( name.Length == 0 || Mod.Creator.ReplaceBadXivSymbols( name ) != name )
         {
             return PenumbraApiEc.InvalidArgument;
         }
@@ -702,7 +894,7 @@ public class PenumbraApi : IDisposable, IPenumbraApi
             return PenumbraApiEc.InvalidArgument;
         }
 
-        var identifier = Penumbra.Actors.FromObject( Dalamud.Objects[ actorIndex ], false, false );
+        var identifier = Penumbra.Actors.FromObject( Dalamud.Objects[ actorIndex ], false, false, true );
         if( !identifier.IsValid )
         {
             return PenumbraApiEc.InvalidArgument;
@@ -713,8 +905,14 @@ public class PenumbraApi : IDisposable, IPenumbraApi
             return PenumbraApiEc.CollectionMissing;
         }
 
-        if( !forceAssignment
-        && ( Penumbra.TempMods.Collections.Individuals.ContainsKey( identifier ) || Penumbra.CollectionManager.Individuals.Individuals.ContainsKey( identifier ) ) )
+        if( forceAssignment )
+        {
+            if( Penumbra.TempMods.Collections.Individuals.ContainsKey( identifier ) && !Penumbra.TempMods.Collections.Delete( identifier ) )
+            {
+                return PenumbraApiEc.AssignmentDeletionFailed;
+            }
+        }
+        else if( Penumbra.TempMods.Collections.Individuals.ContainsKey( identifier ) || Penumbra.CollectionManager.Individuals.Individuals.ContainsKey( identifier ) )
         {
             return PenumbraApiEc.CharacterCollectionExists;
         }
@@ -857,6 +1055,7 @@ public class PenumbraApi : IDisposable, IPenumbraApi
         => ChangedItemClicked?.Invoke( button, it );
 
 
+    [MethodImpl( MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization )]
     private void CheckInitialized()
     {
         if( !Valid )
@@ -867,7 +1066,8 @@ public class PenumbraApi : IDisposable, IPenumbraApi
 
     // Return the collection associated to a current game object. If it does not exist, return the default collection.
     // If the index is invalid, returns false and the default collection.
-    private unsafe bool AssociatedCollection( int gameObjectIdx, out ModCollection collection )
+    [MethodImpl( MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization )]
+    private static unsafe bool AssociatedCollection( int gameObjectIdx, out ModCollection collection )
     {
         collection = Penumbra.CollectionManager.Default;
         if( gameObjectIdx < 0 || gameObjectIdx >= Dalamud.Objects.Length )
@@ -885,7 +1085,20 @@ public class PenumbraApi : IDisposable, IPenumbraApi
         return true;
     }
 
+    [MethodImpl( MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization )]
+    private static unsafe ActorIdentifier AssociatedIdentifier( int gameObjectIdx )
+    {
+        if( gameObjectIdx < 0 || gameObjectIdx >= Dalamud.Objects.Length )
+        {
+            return ActorIdentifier.Invalid;
+        }
+
+        var ptr = ( FFXIVClientStructs.FFXIV.Client.Game.Object.GameObject* )Dalamud.Objects.GetObjectAddress( gameObjectIdx );
+        return Penumbra.Actors.FromObject( ptr, out _, false, true, true );
+    }
+
     // Resolve a path given by string for a specific collection.
+    [MethodImpl( MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization )]
     private static string ResolvePath( string path, Mod.Manager _, ModCollection collection )
     {
         if( !Penumbra.Config.EnableMods )
@@ -963,7 +1176,7 @@ public class PenumbraApi : IDisposable, IPenumbraApi
         }
 
         manips = new HashSet< MetaManipulation >( manipArray!.Length );
-        foreach( var manip in manipArray )
+        foreach( var manip in manipArray.Where( m => m.ManipulationType != MetaManipulation.Type.Unknown ) )
         {
             if( !manips.Add( manip ) )
             {

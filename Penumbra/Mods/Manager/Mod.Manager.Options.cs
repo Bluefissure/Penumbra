@@ -124,6 +124,19 @@ public sealed partial class Mod
             ModOptionChanged.Invoke( ModOptionChangeType.DisplayChange, mod, groupIdx, -1, -1 );
         }
 
+        public void ChangeOptionDescription( Mod mod, int groupIdx, int optionIdx, string newDescription )
+        {
+            var group  = mod._groups[ groupIdx ];
+            var option = group[ optionIdx ];
+            if( option.Description == newDescription || option is not SubMod s )
+            {
+                return;
+            }
+
+            s.Description = newDescription;
+            ModOptionChanged.Invoke( ModOptionChangeType.DisplayChange, mod, groupIdx, optionIdx, -1 );
+        }
+
         public void ChangeGroupPriority( Mod mod, int groupIdx, int newPriority )
         {
             var group = mod._groups[ groupIdx ];

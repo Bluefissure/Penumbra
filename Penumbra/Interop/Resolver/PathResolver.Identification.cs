@@ -8,6 +8,7 @@ using OtterGui;
 using Penumbra.Collections;
 using Penumbra.GameData.Actors;
 using Penumbra.GameData.Enums;
+using Penumbra.Util;
 using Character = FFXIVClientStructs.FFXIV.Client.Game.Character.Character;
 using GameObject = FFXIVClientStructs.FFXIV.Client.Game.Object.GameObject;
 using ObjectKind = Dalamud.Game.ClientState.Objects.Enums.ObjectKind;
@@ -19,6 +20,8 @@ public unsafe partial class PathResolver
     // Identify the correct collection for a GameObject by index and name.
     public static ResolveData IdentifyCollection( GameObject* gameObject, bool useCache )
     {
+        using var performance = Penumbra.Performance.Measure( PerformanceType.IdentifyCollection );
+
         if( gameObject == null )
         {
             return new ResolveData( Penumbra.CollectionManager.Default );
@@ -43,7 +46,7 @@ public unsafe partial class PathResolver
             }
 
             // Aesthetician. The relevant actor is yourself, so use player collection when possible.
-            if( Dalamud.GameGui.GetAddonByName( "ScreenLog", 1 ) == IntPtr.Zero )
+            if( Dalamud.GameGui.GetAddonByName( "ScreenLog" ) == IntPtr.Zero )
             {
                 var player = Penumbra.Actors.GetCurrentPlayer();
                 var collection2 = ( player.IsValid ? CollectionByIdentifier( player ) : null )
@@ -53,13 +56,22 @@ public unsafe partial class PathResolver
                 return IdentifiedCache.Set( collection2, ActorIdentifier.Invalid, gameObject );
             }
 
-            var identifier = Penumbra.Actors.FromObject( gameObject, out var owner, true, false );
-            identifier = Penumbra.CollectionManager.Individuals.ConvertSpecialIdentifier( identifier );
+            var identifier = Penumbra.Actors.FromObject( gameObject, out var owner, true, false, false );
+            if( identifier.Type is IdentifierType.Special )
+            {
+                ( identifier, var type ) = Penumbra.CollectionManager.Individuals.ConvertSpecialIdentifier( identifier );
+                if( Penumbra.Config.UseNoModsInInspect && type == IndividualCollections.SpecialResult.Inspect )
+                {
+                    return IdentifiedCache.Set( ModCollection.Empty, identifier, gameObject );
+                }
+            }
+
             var collection = CollectionByIdentifier( identifier )
              ?? CheckYourself( identifier, gameObject )
              ?? CollectionByAttributes( gameObject )
              ?? CheckOwnedCollection( identifier, owner )
              ?? Penumbra.CollectionManager.Default;
+
             return IdentifiedCache.Set( collection, identifier, gameObject );
         }
         catch( Exception e )
@@ -73,7 +85,8 @@ public unsafe partial class PathResolver
     // or the default collection if no player exists.
     public static ModCollection PlayerCollection()
     {
-        var gameObject = ( GameObject* )Dalamud.Objects.GetObjectAddress( 0 );
+        using var performance = Penumbra.Performance.Measure( PerformanceType.IdentifyCollection );
+        var       gameObject  = ( GameObject* )Dalamud.Objects.GetObjectAddress( 0 );
         if( gameObject == null )
         {
             return Penumbra.CollectionManager.ByType( CollectionType.Yourself )
@@ -120,12 +133,22 @@ public unsafe partial class PathResolver
         var character = ( Character* )actor;
         if( character->ModelCharaId >= 0 && character->ModelCharaId < ValidHumanModels.Count && ValidHumanModels[ character->ModelCharaId ] )
         {
-            var race   = ( SubRace )character->CustomizeData[ 4 ];
-            var gender = ( Gender )( character->CustomizeData[ 1 ] + 1 );
-            var isNpc  = actor->ObjectKind != ( byte )ObjectKind.Player;
+            var bodyType = character->CustomizeData[2];
+            var collection = bodyType switch
+            {
+                3 => Penumbra.CollectionManager.ByType( CollectionType.NonPlayerElderly ),
+                4 => Penumbra.CollectionManager.ByType( CollectionType.NonPlayerChild ),
+                _ => null,
+            };
+            if( collection != null )
+                return collection;
+
+            var race     = ( SubRace )character->CustomizeData[ 4 ];
+            var gender   = ( Gender )( character->CustomizeData[ 1 ] + 1 );
+            var isNpc    = actor->ObjectKind != ( byte )ObjectKind.Player;
 
             var type       = CollectionTypeExtensions.FromParts( race, gender, isNpc );
-            var collection = Penumbra.CollectionManager.ByType( type );
+            collection = Penumbra.CollectionManager.ByType( type );
             collection ??= Penumbra.CollectionManager.ByType( CollectionTypeExtensions.FromParts( gender, isNpc ) );
             return collection;
         }

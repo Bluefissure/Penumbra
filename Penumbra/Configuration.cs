@@ -8,6 +8,7 @@ using OtterGui;
 using OtterGui.Classes;
 using OtterGui.Filesystem;
 using OtterGui.Widgets;
+using Penumbra.GameData.Enums;
 using Penumbra.Import;
 using Penumbra.Mods;
 using Penumbra.UI;
@@ -37,6 +38,7 @@ public partial class Configuration : IPluginConfiguration
     public bool UseCharacterCollectionInInspect { get; set; } = true;
     public bool UseCharacterCollectionInTryOn { get; set; } = true;
     public bool UseOwnerNameForCharacterCollection { get; set; } = true;
+    public bool UseNoModsInInspect { get; set; } = false;
 
     public bool HideRedrawBar { get; set; } = false;
 
@@ -48,9 +50,15 @@ public partial class Configuration : IPluginConfiguration
 
     public int TutorialStep { get; set; } = 0;
 
-    public bool EnableFullResourceLogging { get; set; } = false;
     public bool EnableResourceLogging { get; set; } = false;
     public string ResourceLoggingFilter { get; set; } = string.Empty;
+    public bool EnableResourceWatcher { get; set; } = false;
+    public int MaxResourceWatcherRecords { get; set; } = ResourceWatcher.DefaultMaxEntries;
+
+    public ResourceTypeFlag ResourceWatcherResourceTypes { get; set; } = ResourceExtensions.AllResourceTypes;
+    public ResourceCategoryFlag ResourceWatcherResourceCategories { get; set; } = ResourceExtensions.AllResourceCategories;
+    public ResourceWatcher.RecordType ResourceWatcherRecordTypes { get; set; } = ResourceWatcher.AllRecords;
+
 
     [JsonConverter( typeof( SortModeConverter ) )]
     [JsonProperty( Order = int.MaxValue )]
@@ -60,15 +68,18 @@ public partial class Configuration : IPluginConfiguration
     public float ModSelectorAbsoluteSize { get; set; } = Constants.DefaultAbsoluteSize;
     public int ModSelectorScaledSize { get; set; } = Constants.DefaultScaledSize;
     public bool OpenFoldersByDefault { get; set; } = false;
+    public int SingleGroupRadioMax { get; set; } = 2;
     public string DefaultImportFolder { get; set; } = string.Empty;
     public DoubleModifier DeleteModModifier { get; set; } = new(ModifierHotkey.Control, ModifierHotkey.Shift);
 
+    public bool PrintSuccessfulCommandsToChat { get; set; } = true;
     public bool FixMainWindow { get; set; } = false;
     public bool AutoDeduplicateOnImport { get; set; } = true;
     public bool EnableHttpApi { get; set; } = true;
 
     public string DefaultModImportPath { get; set; } = string.Empty;
     public bool AlwaysOpenDefaultImport { get; set; } = false;
+    public bool KeepDefaultMetaChanges { get; set; } = false;
     public string DefaultModAuthor { get; set; } = DefaultTexToolsData.Author;
 
     public Dictionary< ColorId, uint > Colors { get; set; }

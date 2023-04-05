@@ -5,34 +5,50 @@ using Dalamud.Interface.Windowing;
 using ImGuiNET;
 using OtterGui;
 using OtterGui.Raii;
+using OtterGui.Widgets;
+using Penumbra.Api.Enums;
+using Penumbra.Mods;
 using Penumbra.UI.Classes;
+using Penumbra.Util;
 
 namespace Penumbra.UI;
 
 public sealed partial class ConfigWindow : Window, IDisposable
 {
     private readonly Penumbra              _penumbra;
-    private readonly SettingsTab           _settingsTab;
     private readonly ModFileSystemSelector _selector;
     private readonly ModPanel              _modPanel;
-    private readonly CollectionsTab        _collectionsTab;
-    private readonly EffectiveTab          _effectiveTab;
-    private readonly DebugTab              _debugTab;
-    private readonly ResourceTab           _resourceTab;
     public readonly  ModEditWindow         ModEditPopup = new();
 
-    public ConfigWindow( Penumbra penumbra )
+    private readonly SettingsTab     _settingsTab;
+    private readonly CollectionsTab  _collectionsTab;
+    private readonly ModsTab         _modsTab;
+    private readonly ChangedItemsTab _changedItemsTab;
+    private readonly EffectiveTab    _effectiveTab;
+    private readonly DebugTab        _debugTab;
+    private readonly ResourceTab     _resourceTab;
+    private readonly ResourceWatcher _resourceWatcher;
+
+    public TabType SelectTab = TabType.None;
+    public void SelectMod( Mod mod )
+        => _selector.SelectByValue( mod );
+
+    public ConfigWindow( Penumbra penumbra, ResourceWatcher watcher )
         : base( GetLabel() )
     {
-        _penumbra                  =  penumbra;
+        _penumbra        = penumbra;
+        _resourceWatcher = watcher;
+
         _settingsTab               =  new SettingsTab( this );
         _selector                  =  new ModFileSystemSelector( _penumbra.ModFileSystem );
         _modPanel                  =  new ModPanel( this );
+        _modsTab                   =  new ModsTab( _selector, _modPanel, _penumbra );
         _selector.SelectionChanged += _modPanel.OnSelectionChange;
         _collectionsTab            =  new CollectionsTab( this );
+        _changedItemsTab           =  new ChangedItemsTab( this );
         _effectiveTab              =  new EffectiveTab();
         _debugTab                  =  new DebugTab( this );
-        _resourceTab               =  new ResourceTab( this );
+        _resourceTab               =  new ResourceTab();
         if( Penumbra.Config.FixMainWindow )
         {
             Flags |= ImGuiWindowFlags.NoResize | ImGuiWindowFlags.NoMove;
@@ -50,25 +66,41 @@ public sealed partial class ConfigWindow : Window, IDisposable
         UpdateTutorialStep();
     }
 
+    private ReadOnlySpan< byte > ToLabel( TabType type )
+        => type switch
+        {
+            TabType.Settings         => _settingsTab.Label,
+            TabType.Mods             => _modsTab.Label,
+            TabType.Collections      => _collectionsTab.Label,
+            TabType.ChangedItems     => _changedItemsTab.Label,
+            TabType.EffectiveChanges => _effectiveTab.Label,
+            TabType.ResourceWatcher  => _resourceWatcher.Label,
+            TabType.Debug            => _debugTab.Label,
+            TabType.ResourceManager  => _resourceTab.Label,
+            _                        => ReadOnlySpan< byte >.Empty,
+        };
+
     public override void Draw()
     {
+        using var performance = Penumbra.Performance.Measure( PerformanceType.UiMainWindow );
+
         try
         {
-            if( Penumbra.ImcExceptions.Count > 0 )
+            if( Penumbra.ValidityChecker.ImcExceptions.Count > 0 )
             {
-                DrawProblemWindow( $"There were {Penumbra.ImcExceptions.Count} errors while trying to load IMC files from the game data.\n"
+                DrawProblemWindow( $"There were {Penumbra.ValidityChecker.ImcExceptions.Count} errors while trying to load IMC files from the game data.\n"
                   + "This usually means that your game installation was corrupted by updating the game while having TexTools mods still active.\n"
                   + "It is recommended to not use TexTools and Penumbra (or other Lumina-based tools) at the same time.\n\n"
                   + "Please use the Launcher's Repair Game Files function to repair your client installation.", true );
             }
-            else if( !Penumbra.IsValidSourceRepo )
+            else if( !Penumbra.ValidityChecker.IsValidSourceRepo )
             {
                 DrawProblemWindow(
                     $"You are loading a release version of Penumbra from the repository \"{Dalamud.PluginInterface.SourceRepository}\" instead of the official repository.\n"
-                  + $"Please use the official repository at {Penumbra.Repository}.\n\n"
+                  + $"Please use the official repository at {ValidityChecker.Repository}.\n\n"
                   + "If you are developing for Penumbra and see this, you should compile your version in debug mode to avoid it.", false );
             }
-            else if( Penumbra.IsNotInstalledPenumbra )
+            else if( Penumbra.ValidityChecker.IsNotInstalledPenumbra )
             {
                 DrawProblemWindow(
                     $"You are loading a release version of Penumbra from \"{Dalamud.PluginInterface.AssemblyLocation.Directory?.FullName ?? "Unknown"}\" instead of the installedPlugins directory.\n\n"
@@ -76,7 +108,7 @@ public sealed partial class ConfigWindow : Window, IDisposable
                   + "If you do not know how to do this, please take a look at the readme in Penumbras github repository or join us in discord.\n"
                   + "If you are developing for Penumbra and see this, you should compile your version in debug mode to avoid it.", false );
             }
-            else if( Penumbra.DevPenumbraExists )
+            else if( Penumbra.ValidityChecker.DevPenumbraExists )
             {
                 DrawProblemWindow(
                     $"You are loading a installed version of Penumbra from \"{Dalamud.PluginInterface.AssemblyLocation.Directory?.FullName ?? "Unknown"}\", "
@@ -86,15 +118,12 @@ public sealed partial class ConfigWindow : Window, IDisposable
             }
             else
             {
-                using var bar = ImRaii.TabBar( string.Empty, ImGuiTabBarFlags.NoTooltip );
                 SetupSizes();
-                _settingsTab.Draw();
-                DrawModsTab();
-                _collectionsTab.Draw();
-                DrawChangedItemTab();
-                _effectiveTab.Draw();
-                _debugTab.Draw();
-                _resourceTab.Draw();
+                if( TabBar.Draw( string.Empty, ImGuiTabBarFlags.NoTooltip, ToLabel( SelectTab ), _settingsTab, _modsTab, _collectionsTab,
+                       _changedItemsTab, _effectiveTab, _resourceWatcher, _debugTab, _resourceTab ) )
+                {
+                    SelectTab = TabType.None;
+                }
             }
         }
         catch( Exception e )
@@ -124,7 +153,7 @@ public sealed partial class ConfigWindow : Window, IDisposable
             ImGui.TextUnformatted( "Exceptions" );
             ImGui.Separator();
             using var box = ImRaii.ListBox( "##Exceptions", new Vector2( -1, -1 ) );
-            foreach( var exception in Penumbra.ImcExceptions )
+            foreach( var exception in Penumbra.ValidityChecker.ImcExceptions )
             {
                 ImGuiUtil.TextWrapped( exception.ToString() );
                 ImGui.Separator();

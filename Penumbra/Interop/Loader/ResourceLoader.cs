@@ -82,6 +82,7 @@ public unsafe partial class ResourceLoader : IDisposable
         }
 
         HooksEnabled = true;
+        _createFileWHook.Enable();
         ReadSqPackHook.Enable();
         GetResourceSyncHook.Enable();
         GetResourceAsyncHook.Enable();
@@ -96,6 +97,7 @@ public unsafe partial class ResourceLoader : IDisposable
         }
 
         HooksEnabled = false;
+        _createFileWHook.Disable();
         ReadSqPackHook.Disable();
         GetResourceSyncHook.Disable();
         GetResourceAsyncHook.Disable();
@@ -106,10 +108,10 @@ public unsafe partial class ResourceLoader : IDisposable
     {
         SignatureHelper.Initialise( this );
         _decRefHook = Hook< ResourceHandleDecRef >.FromAddress(
-            ( IntPtr )FFXIVClientStructs.FFXIV.Client.System.Resource.Handle.ResourceHandle.fpDecRef,
+            ( IntPtr )FFXIVClientStructs.FFXIV.Client.System.Resource.Handle.ResourceHandle.MemberFunctionPointers.DecRef,
             ResourceHandleDecRefDetour );
         _incRefHook = Hook< ResourceHandleDestructor >.FromAddress(
-            ( IntPtr )FFXIVClientStructs.FFXIV.Client.System.Resource.Handle.ResourceHandle.fpIncRef, ResourceHandleIncRefDetour );
+            ( IntPtr )FFXIVClientStructs.FFXIV.Client.System.Resource.Handle.ResourceHandle.MemberFunctionPointers.IncRef, ResourceHandleIncRefDetour );
     }
 
     // Event fired whenever a resource is requested.
@@ -128,7 +130,7 @@ public unsafe partial class ResourceLoader : IDisposable
     // Event fired whenever a resource is newly loaded.
     // Success indicates the return value of the loading function (which does not imply that the resource was actually successfully loaded)
     // custom is true if the file was loaded from local files instead of the default SqPacks.
-    public delegate void FileLoadedDelegate( ByteString path, bool success, bool custom );
+    public delegate void FileLoadedDelegate( ResourceHandle* resource, ByteString path, bool success, bool custom );
     public event FileLoadedDelegate? FileLoaded;
 
     // Customization point to control how path resolving is handled.

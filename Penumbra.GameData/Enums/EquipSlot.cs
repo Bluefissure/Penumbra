@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.ComponentModel;
 using System.Linq;
 
 namespace Penumbra.GameData.Enums;
@@ -86,7 +85,7 @@ public static class EquipSlotExtensions
             EquipSlot.RFinger => "rir",
             EquipSlot.LFinger => "ril",
             EquipSlot.Wrists  => "wrs",
-            _                 => throw new InvalidEnumArgumentException(),
+            _                 => "unk",
         };
     }
 
@@ -116,7 +115,7 @@ public static class EquipSlotExtensions
             EquipSlot.BodyHands         => EquipSlot.Body,
             EquipSlot.BodyLegsFeet      => EquipSlot.Body,
             EquipSlot.ChestHands        => EquipSlot.Body,
-            _                           => throw new InvalidEnumArgumentException($"{value} ({(int)value}) is not valid."),
+            _                           => EquipSlot.Unknown,
         };
     }
 

@@ -14,7 +14,7 @@ namespace Penumbra.UI;
 public partial class ConfigWindow
 {
     // Encapsulate for less pollution.
-    private partial class CollectionsTab : IDisposable
+    private partial class CollectionsTab : IDisposable, ITab
     {
         private readonly ConfigWindow _window;
 
@@ -25,18 +25,17 @@ public partial class ConfigWindow
             Penumbra.CollectionManager.CollectionChanged += UpdateIdentifiers;
         }
 
+        public ReadOnlySpan<byte> Label
+            => "Collections"u8;
+
         public void Dispose()
             => Penumbra.CollectionManager.CollectionChanged -= UpdateIdentifiers;
 
-        public void Draw()
-        {
-            using var tab = ImRaii.TabItem( "Collections" );
-            OpenTutorial( BasicTutorialSteps.Collections );
-            if( !tab )
-            {
-                return;
-            }
+        public void DrawHeader()
+            => OpenTutorial( BasicTutorialSteps.Collections );
 
+        public void DrawContent()
+        {
             using var child = ImRaii.Child( "##collections", -Vector2.One );
             if( child )
             {
@@ -167,7 +166,7 @@ public partial class ConfigWindow
             public void Draw()
             {
                 var preview = CurrentIdx >= 0 ? Items[ CurrentIdx ].Item2 : string.Empty;
-                Draw( _label, preview, ref CurrentIdx, _unscaledWidth * ImGuiHelpers.GlobalScale, ImGui.GetTextLineHeightWithSpacing() );
+                Draw( _label, preview, string.Empty, ref CurrentIdx, _unscaledWidth * ImGuiHelpers.GlobalScale, ImGui.GetTextLineHeightWithSpacing() );
             }
 
             protected override string ToString( (CollectionType, string, string) obj )
@@ -225,7 +224,7 @@ public partial class ConfigWindow
                 if( collection != null )
                 {
                     using var id = ImRaii.PushId( ( int )type );
-                    DrawCollectionSelector( string.Empty, _window._inputTextWidth.X, type, true );
+                    DrawCollectionSelector( "##SpecialCombo", _window._inputTextWidth.X, type, true );
                     ImGui.SameLine();
                     if( ImGuiUtil.DrawDisabledButton( FontAwesomeIcon.Trash.ToIconString(), _window._iconButtonSize, string.Empty,
                            false, true ) )

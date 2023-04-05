@@ -7,17 +7,21 @@ using Dalamud;
 using Dalamud.Data;
 using Dalamud.Game.ClientState;
 using Dalamud.Game.ClientState.Objects;
-using Dalamud.Game.ClientState.Objects.Enums;
 using Dalamud.Game.Gui;
 using Dalamud.Plugin;
 using Dalamud.Utility;
 using Dalamud.Utility.Signatures;
+using FFXIVClientStructs.FFXIV.Client.Game.Object;
+using FFXIVClientStructs.FFXIV.Client.System.Framework;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
+using FFXIVClientStructs.FFXIV.Component.GUI;
 using Lumina.Excel.GeneratedSheets;
 using Lumina.Text;
 using Penumbra.GameData.Data;
+using Penumbra.GameData.Structs;
 using Penumbra.String;
 using Character = FFXIVClientStructs.FFXIV.Client.Game.Character.Character;
+using ObjectKind = Dalamud.Game.ClientState.Objects.Enums.ObjectKind;
 
 namespace Penumbra.GameData.Actors;
 
@@ -46,12 +50,19 @@ public sealed partial class ActorManager : IDisposable
         public ActorManagerData(DalamudPluginInterface pluginInterface, DataManager gameData, ClientLanguage language)
             : base(pluginInterface, language, 1)
         {
-            Worlds     = TryCatchData("Worlds",     () => CreateWorldData(gameData));
-            Mounts     = TryCatchData("Mounts",     () => CreateMountData(gameData));
-            Companions = TryCatchData("Companions", () => CreateCompanionData(gameData));
-            Ornaments  = TryCatchData("Ornaments",  () => CreateOrnamentData(gameData));
-            BNpcs      = TryCatchData("BNpcs",      () => CreateBNpcData(gameData));
-            ENpcs      = TryCatchData("ENpcs",      () => CreateENpcData(gameData));
+            var worldTask      = TryCatchDataAsync("Worlds",     CreateWorldData(gameData));
+            var mountsTask     = TryCatchDataAsync("Mounts",     CreateMountData(gameData));
+            var companionsTask = TryCatchDataAsync("Companions", CreateCompanionData(gameData));
+            var ornamentsTask  = TryCatchDataAsync("Ornaments",  CreateOrnamentData(gameData));
+            var bNpcsTask      = TryCatchDataAsync("BNpcs",      CreateBNpcData(gameData));
+            var eNpcsTask      = TryCatchDataAsync("ENpcs",      CreateENpcData(gameData));
+
+            Worlds     = worldTask.Result;
+            Mounts     = mountsTask.Result;
+            Companions = companionsTask.Result;
+            Ornaments  = ornamentsTask.Result;
+            BNpcs      = bNpcsTask.Result;
+            ENpcs      = eNpcsTask.Result;
         }
 
         /// <summary>
@@ -59,6 +70,15 @@ public sealed partial class ActorManager : IDisposable
         /// </summary>
         public string ToWorldName(ushort worldId)
             => worldId == ushort.MaxValue ? "Any World" : Worlds.TryGetValue(worldId, out var name) ? name : "Invalid";
+
+        /// <summary>
+        /// Return the world id corresponding to the given name.
+        /// </summary>
+        /// <returns>ushort.MaxValue if the name is empty, 0 if it is not a valid world, or the worlds id.</returns>
+        public ushort ToWorldId(string worldName)
+            => worldName.Length != 0
+                ? Worlds.FirstOrDefault(kvp => string.Equals(kvp.Value, worldName, StringComparison.OrdinalIgnoreCase), default).Key
+                : ushort.MaxValue;
 
         /// <summary>
         /// Convert a given ID for a certain ObjectKind to a name.
@@ -95,40 +115,53 @@ public sealed partial class ActorManager : IDisposable
             DisposeTag("ENpcs");
         }
 
-        private IReadOnlyDictionary<ushort, string> CreateWorldData(DataManager gameData)
-            => gameData.GetExcelSheet<World>(Language)!
-                .Where(w => w.IsPublic && !w.Name.RawData.IsEmpty)
-                .ToDictionary(w => (ushort)w.RowId, w => w.Name.ToString());
+        private Action<Dictionary<ushort, string>> CreateWorldData(DataManager gameData)
+            => d =>
+            {
+                foreach (var w in gameData.GetExcelSheet<World>(Language)!.Where(w => w.IsPublic && !w.Name.RawData.IsEmpty))
+                    d.TryAdd((ushort)w.RowId, string.Intern(w.Name.ToDalamudString().TextValue));
+            };
 
-        private IReadOnlyDictionary<uint, string> CreateMountData(DataManager gameData)
-            => gameData.GetExcelSheet<Mount>(Language)!
-                .Where(m => m.Singular.RawData.Length > 0 && m.Order >= 0)
-                .ToDictionary(m => m.RowId, m => ToTitleCaseExtended(m.Singular, m.Article));
+        private Action<Dictionary<uint, string>> CreateMountData(DataManager gameData)
+            => d =>
+            {
+                foreach (var m in gameData.GetExcelSheet<Mount>(Language)!.Where(m => m.Singular.RawData.Length > 0 && m.Order >= 0))
+                    d.TryAdd(m.RowId, ToTitleCaseExtended(m.Singular, m.Article));
+            };
 
-        private IReadOnlyDictionary<uint, string> CreateCompanionData(DataManager gameData)
-            => gameData.GetExcelSheet<Companion>(Language)!
-                .Where(c => c.Singular.RawData.Length > 0 && c.Order < ushort.MaxValue)
-                .ToDictionary(c => c.RowId, c => ToTitleCaseExtended(c.Singular, c.Article));
+        private Action<Dictionary<uint, string>> CreateCompanionData(DataManager gameData)
+            => d =>
+            {
+                foreach (var c in gameData.GetExcelSheet<Companion>(Language)!.Where(c
+                             => c.Singular.RawData.Length > 0 && c.Order < ushort.MaxValue))
+                    d.TryAdd(c.RowId, ToTitleCaseExtended(c.Singular, c.Article));
+            };
 
-        private IReadOnlyDictionary<uint, string> CreateOrnamentData(DataManager gameData)
-            => gameData.GetExcelSheet<Ornament>(Language)!
-                .Where(o => o.Singular.RawData.Length > 0)
-                .ToDictionary(o => o.RowId, o => ToTitleCaseExtended(o.Singular, o.Article));
+        private Action<Dictionary<uint, string>> CreateOrnamentData(DataManager gameData)
+            => d =>
+            {
+                foreach (var o in gameData.GetExcelSheet<Ornament>(Language)!.Where(o => o.Singular.RawData.Length > 0))
+                    d.TryAdd(o.RowId, ToTitleCaseExtended(o.Singular, o.Article));
+            };
 
-        private IReadOnlyDictionary<uint, string> CreateBNpcData(DataManager gameData)
-            => gameData.GetExcelSheet<BNpcName>(Language)!
-                .Where(n => n.Singular.RawData.Length > 0)
-                .ToDictionary(n => n.RowId, n => ToTitleCaseExtended(n.Singular, n.Article));
+        private Action<Dictionary<uint, string>> CreateBNpcData(DataManager gameData)
+            => d =>
+            {
+                foreach (var n in gameData.GetExcelSheet<BNpcName>(Language)!.Where(n => n.Singular.RawData.Length > 0))
+                    d.TryAdd(n.RowId, ToTitleCaseExtended(n.Singular, n.Article));
+            };
 
-        private IReadOnlyDictionary<uint, string> CreateENpcData(DataManager gameData)
-            => gameData.GetExcelSheet<ENpcResident>(Language)!
-                .Where(e => e.Singular.RawData.Length > 0)
-                .ToDictionary(e => e.RowId, e => ToTitleCaseExtended(e.Singular, e.Article));
+        private Action<Dictionary<uint, string>> CreateENpcData(DataManager gameData)
+            => d =>
+            {
+                foreach (var n in gameData.GetExcelSheet<ENpcResident>(Language)!.Where(e => e.Singular.RawData.Length > 0))
+                    d.TryAdd(n.RowId, ToTitleCaseExtended(n.Singular, n.Article));
+            };
 
         private static string ToTitleCaseExtended(SeString s, sbyte article)
         {
             if (article == 1)
-                return s.ToDalamudString().ToString();
+                return string.Intern(s.ToDalamudString().ToString());
 
             var sb        = new StringBuilder(s.ToDalamudString().ToString());
             var lastSpace = true;
@@ -145,20 +178,23 @@ public sealed partial class ActorManager : IDisposable
                 }
             }
 
-            return sb.ToString();
+            return string.Intern(sb.ToString());
         }
     }
 
     public readonly ActorManagerData Data;
 
-    public ActorManager(DalamudPluginInterface pluginInterface, ObjectTable objects, ClientState state, DataManager gameData, GameGui gameGui,
+    public ActorManager(DalamudPluginInterface pluginInterface, ObjectTable objects, ClientState state, Dalamud.Game.Framework framework,
+        DataManager gameData, GameGui gameGui,
         Func<ushort, short> toParentIdx)
-        : this(pluginInterface, objects, state, gameData, gameGui, gameData.Language, toParentIdx)
+        : this(pluginInterface, objects, state, framework, gameData, gameGui, gameData.Language, toParentIdx)
     { }
 
-    public ActorManager(DalamudPluginInterface pluginInterface, ObjectTable objects, ClientState state, DataManager gameData, GameGui gameGui,
+    public ActorManager(DalamudPluginInterface pluginInterface, ObjectTable objects, ClientState state, Dalamud.Game.Framework framework,
+        DataManager gameData, GameGui gameGui,
         ClientLanguage language, Func<ushort, short> toParentIdx)
     {
+        _framework   = framework;
         _objects     = objects;
         _gameGui     = gameGui;
         _clientState = state;
@@ -188,13 +224,125 @@ public sealed partial class ActorManager : IDisposable
         return CreatePlayer(InspectName, InspectWorldId);
     }
 
+    public unsafe bool ResolvePartyBannerPlayer(ScreenActor type, out ActorIdentifier id)
+    {
+        id = ActorIdentifier.Invalid;
+        var module = Framework.Instance()->GetUiModule()->GetAgentModule();
+        if (module == null)
+            return false;
+
+        var agent = (AgentBannerInterface*)module->GetAgentByInternalId(AgentId.BannerParty);
+        if (agent == null || !agent->AgentInterface.IsAgentActive())
+            agent = (AgentBannerInterface*)module->GetAgentByInternalId(AgentId.BannerMIP);
+        if (agent == null || !agent->AgentInterface.IsAgentActive())
+            return false;
+
+        var idx       = (ushort)type - (ushort)ScreenActor.CharacterScreen;
+        var character = agent->Character(idx);
+        if (character == null)
+            return true;
+
+        var name = new ByteString(character->Name1.StringPtr);
+        id = CreatePlayer(name, (ushort)character->WorldId);
+        return true;
+    }
+
+    private unsafe bool SearchPlayerCustomize(Character* character, int idx, out ActorIdentifier id)
+    {
+        var other = (Character*)_objects.GetObjectAddress(idx);
+        if (other == null || !CustomizeData.ScreenActorEquals((CustomizeData*)character->CustomizeData, (CustomizeData*)other->CustomizeData))
+        {
+            id = ActorIdentifier.Invalid;
+            return false;
+        }
+
+        id = FromObject(&other->GameObject, out _, false, true, false);
+        return true;
+    }
+
+    private unsafe ActorIdentifier SearchPlayersCustomize(Character* gameObject, int idx1, int idx2, int idx3)
+        => SearchPlayerCustomize(gameObject,  idx1, out var ret)
+         || SearchPlayerCustomize(gameObject, idx2, out ret)
+         || SearchPlayerCustomize(gameObject, idx3, out ret)
+                ? ret
+                : ActorIdentifier.Invalid;
+
+    private unsafe ActorIdentifier SearchPlayersCustomize(Character* gameObject)
+    {
+        static bool Compare(Character* a, Character* b)
+        {
+            var data1  = (CustomizeData*)a->CustomizeData;
+            var data2  = (CustomizeData*)b->CustomizeData;
+            var equals = CustomizeData.ScreenActorEquals(data1, data2);
+            return equals;
+        }
+
+        for (var i = 0; i < (int)ScreenActor.CutsceneStart; i += 2)
+        {
+            var obj = (GameObject*)_objects.GetObjectAddress(i);
+            if (obj != null
+             && obj->ObjectKind is (byte)ObjectKind.Player
+             && Compare(gameObject, (Character*)obj))
+                return FromObject(obj, out _, false, true, false);
+        }
+
+        return ActorIdentifier.Invalid;
+    }
+
+    public unsafe bool ResolveMahjongPlayer(ScreenActor type, out ActorIdentifier id)
+    {
+        id = ActorIdentifier.Invalid;
+        if (_clientState.TerritoryType != 831 && _gameGui.GetAddonByName("EmjIntro") == IntPtr.Zero)
+            return false;
+
+        var obj = (Character*)_objects.GetObjectAddress((int)type);
+        if (obj == null)
+            return false;
+
+        id = type switch
+        {
+            ScreenActor.CharacterScreen => GetCurrentPlayer(),
+            ScreenActor.ExamineScreen   => SearchPlayersCustomize(obj, 2, 4, 6),
+            ScreenActor.FittingRoom     => SearchPlayersCustomize(obj, 4, 2, 6),
+            ScreenActor.DyePreview      => SearchPlayersCustomize(obj, 6, 2, 4),
+            _                           => ActorIdentifier.Invalid,
+        };
+        return true;
+    }
+
+    public unsafe bool ResolvePvPBannerPlayer(ScreenActor type, out ActorIdentifier id)
+    {
+        id = ActorIdentifier.Invalid;
+        if (!_clientState.IsPvPExcludingDen)
+            return false;
+
+        var addon = (AtkUnitBase*)_gameGui.GetAddonByName("PvPMap");
+        if (addon == null || addon->IsVisible)
+            return false;
+
+        var obj = (Character*)_objects.GetObjectAddress((int)type);
+        if (obj == null)
+            return false;
+
+        id = type switch
+        {
+            ScreenActor.CharacterScreen => SearchPlayersCustomize(obj),
+            ScreenActor.ExamineScreen   => SearchPlayersCustomize(obj),
+            ScreenActor.FittingRoom     => SearchPlayersCustomize(obj),
+            ScreenActor.DyePreview      => SearchPlayersCustomize(obj),
+            ScreenActor.Portrait        => SearchPlayersCustomize(obj),
+            _                           => ActorIdentifier.Invalid,
+        };
+        return true;
+    }
+
     public unsafe ActorIdentifier GetCardPlayer()
     {
         var agent = AgentCharaCard.Instance();
         if (agent == null || agent->Data == null)
             return ActorIdentifier.Invalid;
 
-        var worldId = *(ushort*)((byte*)agent->Data + 0xC0);
+        var worldId = *(ushort*)((byte*)agent->Data + Offsets.AgentCharaCardDataWorldId);
         return CreatePlayer(new ByteString(agent->Data->Name.StringPtr), worldId);
     }
 
@@ -214,16 +362,17 @@ public sealed partial class ActorManager : IDisposable
     ~ActorManager()
         => Dispose();
 
-    private readonly ObjectTable _objects;
-    private readonly ClientState _clientState;
-    private readonly GameGui     _gameGui;
+    private readonly Dalamud.Game.Framework _framework;
+    private readonly ObjectTable            _objects;
+    private readonly ClientState            _clientState;
+    private readonly GameGui                _gameGui;
 
     private readonly Func<ushort, short> _toParentIdx;
 
-    [Signature("0F B7 0D ?? ?? ?? ?? C7 85", ScanType = ScanType.StaticAddress)]
+    [Signature(Sigs.InspectTitleId, ScanType = ScanType.StaticAddress)]
     private static unsafe ushort* _inspectTitleId = null!;
 
-    [Signature("0F B7 0D ?? ?? ?? ?? E8 ?? ?? ?? ?? 48 8B D0", ScanType = ScanType.StaticAddress)]
+    [Signature(Sigs.InspectWorldId, ScanType = ScanType.StaticAddress)]
     private static unsafe ushort* _inspectWorldId = null!;
 
     private static unsafe ushort InspectTitleId

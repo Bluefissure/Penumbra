@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using OtterGui.Widgets;
 
 namespace Penumbra.UI;
@@ -27,9 +28,140 @@ public partial class ConfigWindow
         Add6_0_0( ret );
         Add6_0_2( ret );
         Add6_0_5( ret );
-
+        Add6_1_0( ret );
+        Add6_1_1( ret );
+        Add6_2_0( ret );
+        Add6_3_0( ret );
+        Add6_4_0( ret );
+        Add6_5_0( ret );
+        Add6_5_2( ret );
+        Add6_6_0( ret );
+        Add6_6_1( ret );
         return ret;
     }
+
+    private static void Add6_6_1( Changelog log )
+        => log.NextVersion( "Version 0.6.6.1" )
+           .RegisterEntry( "Added an option to make successful chat commands not print their success confirmations to chat."  )
+           .RegisterEntry( "Fixed an issue with migration of old mods not working anymore (fixes Material UI problems)."  )
+           .RegisterEntry( "Fixed some issues with using the Assign Current Player and Assign Current Target buttons." );
+
+    private static void Add6_6_0( Changelog log )
+        => log.NextVersion( "Version 0.6.6.0" )
+           .RegisterEntry( "Added new Collection Assignment Groups for Children NPC and Elderly NPC. Those take precedence before any non-individual assignments for any NPC using a child- or elderly model respectively."  )
+           .RegisterEntry( "Added an option to display Single Selection Groups as a group of radio buttons similar to Multi Selection Groups, when the number of available options is below the specified value. Default value is 2."  )
+           .RegisterEntry( "Added a button in option groups to collapse the option list if it has more than 5 available options."  )
+           .RegisterEntry(
+                "Penumbra now circumvents the games inability to read files at paths longer than 260 UTF16 characters and can also deal with generic unicode symbols in paths." )
+           .RegisterEntry( "This means that Penumbra should no longer cause issues when files become too long or when there is a non-ASCII character in them.", 1 )
+           .RegisterEntry(
+                "Shorter paths are still better, so restrictions on the root directory have not been relaxed. Mod names should no longer replace non-ASCII symbols on import though.", 1 )
+           .RegisterEntry(
+                "Resource logging has been relegated to its own tab with better filtering. Please do not keep resource logging on arbitrarily or set a low record limit if you do, otherwise this eats a lot of performance and memory after a while." )
+           .RegisterEntry( "Added a lot of facilities to edit the shader part of .mtrl files and .shpk files themselves in the Advanced Editing Tab (Thanks Ny and aers)."  )
+           .RegisterEntry( "Added splitting of Multi Selection Groups with too many options when importing .pmp files or adding mods via IPC." )
+           .RegisterEntry( "Discovery, Reloading and Unloading of a specified mod is now possible via HTTP API (Thanks Sebastina)." )
+           .RegisterEntry( "Cleaned up the HTTP API somewhat, removed currently useless options."  )
+           .RegisterEntry( "Fixed an issue when extracting some textures."  )
+           .RegisterEntry( "Fixed an issue with mannequins inheriting individual assignments for the current player when using ownership."  )
+           .RegisterEntry( "Fixed an issue with the resolving of .phyb and .sklb files for Item Swaps of head or body items with an EST entry but no unique racial model."  );
+    
+    private static void Add6_5_2( Changelog log )
+        => log.NextVersion( "Version 0.6.5.2" )
+           .RegisterEntry( "Updated for game version 6.31 Hotfix." )
+           .RegisterEntry( "Added option-specific descriptions for mods, instead of having just descriptions for groups of options. (Thanks Caraxi!)" )
+           .RegisterEntry( "Those are now accurately parsed from TTMPs, too.", 1 )
+           .RegisterEntry( "Improved launch times somewhat through parallelization of some tasks." )
+           .RegisterEntry(
+                "Added some performance tracking for start-up durations and for real time data to Release builds. They can be seen and enabled in the Debug tab when Debug Mode is enabled." )
+           .RegisterEntry( "Fixed an issue with IMC changes and Mare Synchronos interoperability." )
+           .RegisterEntry( "Fixed an issue with housing mannequins crashing the game when resource logging was enabled." )
+           .RegisterEntry( "Fixed an issue generating Mip Maps for texture import on Wine." );
+
+    private static void Add6_5_0( Changelog log )
+        => log.NextVersion( "Version 0.6.5.0" )
+           .RegisterEntry( "Fixed an issue with Item Swaps not using applied IMC changes in some cases." )
+           .RegisterEntry( "Improved error message on texture import when failing to create mip maps (slightly)." )
+           .RegisterEntry( "Tried to fix duty party banner identification again, also for the recommendation window this time." )
+           .RegisterEntry( "Added batched IPC to improve Mare performance." );
+
+    private static void Add6_4_0( Changelog log )
+        => log.NextVersion( "Version 0.6.4.0" )
+           .RegisterEntry( "Fixed an issue with the identification of actors in the duty group portrait." )
+           .RegisterEntry( "Fixed some issues with wrongly cached actors and resources." )
+           .RegisterEntry( "Fixed animation handling after redraws (notably for PLD idle animations with a shield equipped)." )
+           .RegisterEntry( "Fixed an issue with collection listing API skipping one collection." )
+           .RegisterEntry( "Fixed an issue with BGM files being sometimes loaded from other collections than the base collection, causing crashes." )
+           .RegisterEntry( "Also distinguished file resolving for different file categories (improving performance) and disabled resolving for script files entirely.", 1 )
+           .RegisterEntry( "Some miscellaneous backend changes due to the Glamourer rework." );
+
+    private static void Add6_3_0( Changelog log )
+        => log.NextVersion( "Version 0.6.3.0" )
+           .RegisterEntry( "Add an Assign Current Target button for individual assignments" )
+           .RegisterEntry( "Try identifying all banner actors correctly for PvE duties, Crystalline Conflict and Mahjong." )
+           .RegisterEntry( "Please let me know if this does not work for anything except identical twins.", 1 )
+           .RegisterEntry( "Add handling for the 3 new screen actors (now 8 total, for PvE dutie portraits)." )
+           .RegisterEntry( "Update the Battle NPC name database for 6.3." )
+           .RegisterEntry( "Added API/IPC functions to obtain or set group or individual collections." )
+           .RegisterEntry( "Maybe fix a problem with textures sometimes not loading from their corresponding collection." )
+           .RegisterEntry( "Another try to fix a problem with the collection selectors breaking state." )
+           .RegisterEntry( "Fix a problem identifying companions." )
+           .RegisterEntry( "Fix a problem when deleting collections assigned to Groups." )
+           .RegisterEntry( "Fix a problem when using the Assign Currently Played Character button and then logging onto a different character without restarting in between." )
+           .RegisterEntry( "Some miscellaneous backend changes." );
+
+    private static void Add6_2_0( Changelog log )
+        => log.NextVersion( "Version 0.6.2.0" )
+           .RegisterEntry( "Update Penumbra for .net7, Dalamud API 8 and patch 6.3." )
+           .RegisterEntry( "Add a Bulktag chat command to toggle all mods with specific tags. (by SoyaX)" )
+           .RegisterEntry( "Add placeholder options for setting individual collections via chat command." )
+           .RegisterEntry( "Add toggles to swap left and/or right rings separately for ring item swap." )
+           .RegisterEntry( "Add handling for looping sound effects caused by animations in non-base collections." )
+           .RegisterEntry( "Add an option to not use any mods at all in the Inspect/Try-On window." )
+           .RegisterEntry( "Add handling for Mahjong actors." )
+           .RegisterEntry( "Improve hint text for File Swaps in Advanced Editing, also inverted file swap display order." )
+           .RegisterEntry( "Fix a problem where the collection selectors could get desynchronized after adding or deleting collections." )
+           .RegisterEntry( "Fix a problem that could cause setting state to get desynchronized." )
+           .RegisterEntry( "Fix an oversight where some special screen actors did not actually respect the settings made for them." )
+           .RegisterEntry( "Add collection and associated game object to Full Resource Logging." )
+           .RegisterEntry( "Add performance tracking for DEBUG-compiled versions (i.e. testing only)." )
+           .RegisterEntry( "Add some information to .mdl display and fix not respecting padding when reading them. (0.6.1.3)" )
+           .RegisterEntry( "Fix association of some vfx game objects. (0.6.1.3)" )
+           .RegisterEntry( "Stop forcing AVFX files to load synchronously. (0.6.1.3)" )
+           .RegisterEntry( "Fix an issue when incorporating deduplicated meta files. (0.6.1.2)" );
+
+    private static void Add6_1_1( Changelog log )
+        => log.NextVersion( "Version 0.6.1.1" )
+           .RegisterEntry( "Added a toggle to use all the effective changes from the entire currently selected collection for swaps, instead of the selected mod." )
+           .RegisterEntry( "Fix using equipment paths for accessory swaps and thus accessory swaps not working at all" )
+           .RegisterEntry( "Fix issues with swaps with gender-locked gear where the models for the other gender do not exist." )
+           .RegisterEntry( "Fix swapping universal hairstyles for midlanders breaking them for other races." )
+           .RegisterEntry( "Add some actual error messages on failure to create item swaps." )
+           .RegisterEntry( "Fix warnings about more than one affected item appearing for single items." );
+
+    private static void Add6_1_0( Changelog log )
+        => log.NextVersion( "Version 0.6.1.0 (Happy New Year! Edition)" )
+           .RegisterEntry( "Add a prototype for Item Swapping." )
+           .RegisterEntry( "A new tab in Advanced Editing.", 1 )
+           .RegisterEntry( "Swapping of Hair, Tail, Ears, Equipment and Accessories is supported. Weapons and Faces may be coming.", 1 )
+           .RegisterEntry( "The manipulations currently in use by the selected mod with its currents settings (ignoring enabled state)"
+              + " should be used when creating the swap, but you can also just swap unmodded things.", 1 )
+           .RegisterEntry( "You can write a swap to a new mod, or to a new option in the currently selected mod.", 1 )
+           .RegisterEntry( "The swaps are not heavily tested yet, and may also be not perfectly efficient. Please leave feedback.", 1 )
+           .RegisterEntry( "More detailed help or explanations will be added later.", 1 )
+           .RegisterEntry( "Heavily improve Chat Commands. Use /penumbra help for more information." )
+           .RegisterEntry( "Penumbra now considers meta manipulations for Changed Items." )
+           .RegisterEntry( "Penumbra now tries to associate battle voices to specific actors, so that they work in collections." )
+           .RegisterEntry( "Heavily improve .atex and .avfx handling, Penumbra can now associate VFX to specific actors far better, including ground effects." )
+           .RegisterEntry( "Improve some file handling for Mare-Interaction." )
+           .RegisterEntry( "Add Equipment Slots to Demihuman IMC Edits." )
+           .RegisterEntry( "Add a toggle to keep metadata edits that apply the default value (and thus do not really change anything) on import from TexTools .meta files." )
+           .RegisterEntry( "Add an option to directly change the 'Wait For Plugins To Load'-Dalamud Option from Penumbra." )
+           .RegisterEntry( "Add API to copy mod settings from one mod to another." )
+           .RegisterEntry( "Fix a problem where creating individual collections did not trigger events." )
+           .RegisterEntry( "Add a Hack to support Anamnesis Redrawing better. (0.6.0.6)" )
+           .RegisterEntry( "Fix another problem with the aesthetician. (0.6.0.6)" )
+           .RegisterEntry( "Fix a problem with the export directory not being respected. (0.6.0.6)" );
 
     private static void Add6_0_5( Changelog log )
         => log.NextVersion( "Version 0.6.0.5" )

@@ -3,11 +3,13 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using System.Numerics;
+using Dalamud.Interface.Internal.Notifications;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using OtterGui;
 using OtterGui.Filesystem;
 using Penumbra.Api.Enums;
+using Penumbra.Util;
 
 namespace Penumbra.Mods;
 
@@ -44,7 +46,6 @@ public partial class Mod
 
         public static MultiModGroup? Load( Mod mod, JObject json, int groupIdx )
         {
-            var options = json[ "Options" ];
             var ret = new MultiModGroup()
             {
                 Name            = json[ nameof( Name ) ]?.ToObject< string >()          ?? string.Empty,
@@ -57,14 +58,14 @@ public partial class Mod
                 return null;
             }
 
+            var options = json["Options"];
             if( options != null )
             {
                 foreach( var child in options.Children() )
                 {
                     if( ret.PrioritizedOptions.Count == IModGroup.MaxMultiOptions )
                     {
-                        Penumbra.Log.Warning(
-                            $"Multi Group {ret.Name} has more than {IModGroup.MaxMultiOptions} options, ignoring excessive options." );
+                        ChatUtil.NotificationMessage( $"Multi Group {ret.Name} has more than {IModGroup.MaxMultiOptions} options, ignoring excessive options.", "Warning", NotificationType.Warning );
                         break;
                     }
 

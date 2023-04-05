@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 using System.Linq;
 using System.Numerics;
 using System.Text;
@@ -20,11 +21,13 @@ namespace Penumbra.UI.Classes;
 
 public partial class ModEditWindow : Window, IDisposable
 {
-    private const string  WindowBaseLabel = "###SubModEdit";
-    private       Editor? _editor;
-    private       Mod?    _mod;
-    private       Vector2 _iconSize         = Vector2.Zero;
-    private       bool    _allowReduplicate = false;
+    private const     string         WindowBaseLabel = "###SubModEdit";
+    internal readonly ItemSwapWindow _swapWindow     = new();
+
+    private Editor? _editor;
+    private Mod?    _mod;
+    private Vector2 _iconSize         = Vector2.Zero;
+    private bool    _allowReduplicate = false;
 
     public void ChangeMod( Mod mod )
     {
@@ -45,6 +48,8 @@ public partial class ModEditWindow : Window, IDisposable
         _selectedFiles.Clear();
         _modelTab.Reset();
         _materialTab.Reset();
+        _shaderPackageTab.Reset();
+        _swapWindow.UpdateMod( mod, Penumbra.CollectionManager.Current[ mod.Index ].Settings );
     }
 
     public void ChangeOption( ISubMod? subMod )
@@ -58,6 +63,8 @@ public partial class ModEditWindow : Window, IDisposable
 
     public override void PreDraw()
     {
+        using var performance = Penumbra.Performance.Measure( PerformanceType.UiAdvancedWindow );
+
         var sb = new StringBuilder( 256 );
 
         var redirections = 0;
@@ -132,6 +139,8 @@ public partial class ModEditWindow : Window, IDisposable
 
     public override void Draw()
     {
+        using var performance = Penumbra.Performance.Measure( PerformanceType.UiAdvancedWindow );
+
         using var tabBar = ImRaii.TabBar( "##tabs" );
         if( !tabBar )
         {
@@ -148,6 +157,8 @@ public partial class ModEditWindow : Window, IDisposable
         _modelTab.Draw();
         _materialTab.Draw();
         DrawTextureTab();
+        _shaderPackageTab.Draw();
+        _swapWindow.DrawItemSwapPanel();
     }
 
     // A row of three buttonSizes and a help marker that can be used for material suffix changing.
@@ -518,23 +529,62 @@ public partial class ModEditWindow : Window, IDisposable
 
         ImGui.TableNextColumn();
         ImGui.SetNextItemWidth( -1 );
-        ImGui.InputTextWithHint( "##swapKey", "New Swap Source...", ref _newSwapKey, Utf8GamePath.MaxGamePathLength );
+        ImGui.InputTextWithHint( "##swapKey", "Load this file...", ref _newSwapValue, Utf8GamePath.MaxGamePathLength );
         ImGui.TableNextColumn();
         ImGui.SetNextItemWidth( -1 );
-        ImGui.InputTextWithHint( "##swapValue", "New Swap Target...", ref _newSwapValue, Utf8GamePath.MaxGamePathLength );
+        ImGui.InputTextWithHint( "##swapValue", "... instead of this file.", ref _newSwapKey, Utf8GamePath.MaxGamePathLength );
+    }
+
+    /// <summary>
+    /// Find the best matching associated file for a given path.
+    /// </summary>
+    /// <remarks>
+    /// Tries to resolve from the current collection first and chooses the currently resolved file if any exists.
+    /// If none exists, goes through all options in the currently selected mod (if any) in order of priority and resolves in them. 
+    /// If no redirection is found in either of those options, returns the original path.
+    /// </remarks>
+    private FullPath FindBestMatch( Utf8GamePath path )
+    {
+        var currentFile = Penumbra.CollectionManager.Current.ResolvePath( path );
+        if( currentFile != null )
+        {
+            return currentFile.Value;
+        }
+
+        if( _mod != null )
+        {
+            foreach( var option in _mod.Groups.OrderByDescending( g => g.Priority )
+                       .SelectMany( g => g.WithIndex().OrderByDescending( o => g.OptionPriority( o.Index ) ).Select( g => g.Value ) )
+                       .Append( _mod.Default ) )
+            {
+                if( option.Files.TryGetValue( path, out var value ) || option.FileSwaps.TryGetValue( path, out value ) )
+                {
+                    return value;
+                }
+            }
+        }
+
+        return new FullPath( path );
     }
 
     public ModEditWindow()
         : base( WindowBaseLabel )
     {
-        _materialTab = new FileEditor< MtrlFile >( "Materials (WIP)", ".mtrl",
+        _materialTab = new FileEditor< MtrlTab >( "Materials", ".mtrl",
             () => _editor?.MtrlFiles ?? Array.Empty< Editor.FileRegistry >(),
             DrawMaterialPanel,
-            () => _mod?.ModPath.FullName ?? string.Empty );
-        _modelTab = new FileEditor< MdlFile >( "Models (WIP)", ".mdl",
+            () => _mod?.ModPath.FullName ?? string.Empty,
+            bytes => new MtrlTab( this, new MtrlFile( bytes ) ) );
+        _modelTab = new FileEditor< MdlFile >( "Models", ".mdl",
             () => _editor?.MdlFiles ?? Array.Empty< Editor.FileRegistry >(),
             DrawModelPanel,
-            () => _mod?.ModPath.FullName ?? string.Empty );
+            () => _mod?.ModPath.FullName ?? string.Empty,
+            null );
+        _shaderPackageTab = new FileEditor< ShpkTab >( "Shader Packages", ".shpk",
+            () => _editor?.ShpkFiles ?? Array.Empty< Editor.FileRegistry >(),
+            DrawShaderPackagePanel,
+            () => _mod?.ModPath.FullName ?? string.Empty,
+            null );
         _center = new CombinedTexture( _left, _right );
     }
 
@@ -544,5 +594,6 @@ public partial class ModEditWindow : Window, IDisposable
         _left.Dispose();
         _right.Dispose();
         _center.Dispose();
+        _swapWindow.Dispose();
     }
 }

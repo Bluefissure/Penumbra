@@ -138,6 +138,7 @@ public partial class Mod
                 return;
             }
 
+            Creator.SplitMultiGroups( modFolder );
             var mod = LoadMod( modFolder, true );
             if( mod == null )
             {
@@ -175,7 +176,7 @@ public partial class Mod
                 return NewDirectoryState.Identical;
             }
 
-            var fixedNewName = ReplaceBadXivSymbols( newName );
+            var fixedNewName = Creator.ReplaceBadXivSymbols( newName );
             if( fixedNewName != newName )
             {
                 return NewDirectoryState.ContainsInvalidSymbols;

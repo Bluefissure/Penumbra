@@ -92,9 +92,9 @@ public sealed partial class ModFileSystemSelector : FileSystemSelector< Mod, Mod
         {
             try
             {
-                var newDir = Mod.CreateModFolder( Penumbra.ModManager.BasePath, _newModName );
-                Mod.CreateMeta( newDir, _newModName, Penumbra.Config.DefaultModAuthor, string.Empty, "1.0", string.Empty );
-                Mod.CreateDefaultFiles( newDir );
+                var newDir = Mod.Creator.CreateModFolder( Penumbra.ModManager.BasePath, _newModName );
+                Mod.Creator.CreateMeta( newDir, _newModName, Penumbra.Config.DefaultModAuthor, string.Empty, "1.0", string.Empty );
+                Mod.Creator.CreateDefaultFiles( newDir );
                 Penumbra.ModManager.AddMod( newDir );
                 _newModName = string.Empty;
             }
@@ -484,7 +484,7 @@ public sealed partial class ModFileSystemSelector : FileSystemSelector< Mod, Mod
             ImGuiUtil.BulletTextColored( ColorId.DisabledMod.Value(), "disabled in the current collection." );
             ImGuiUtil.BulletTextColored( ColorId.InheritedMod.Value(), "enabled due to inheritance from another collection." );
             ImGuiUtil.BulletTextColored( ColorId.InheritedDisabledMod.Value(), "disabled due to inheritance from another collection." );
-            ImGuiUtil.BulletTextColored( ColorId.UndefinedMod.Value(), "disabled in all inherited collections." );
+            ImGuiUtil.BulletTextColored( ColorId.UndefinedMod.Value(), "unconfigured in all inherited collections." );
             ImGuiUtil.BulletTextColored( ColorId.NewMod.Value(),
                 "newly imported during this session. Will go away when first enabling a mod or when Penumbra is reloaded." );
             ImGuiUtil.BulletTextColored( ColorId.HandledConflictMod.Value(),

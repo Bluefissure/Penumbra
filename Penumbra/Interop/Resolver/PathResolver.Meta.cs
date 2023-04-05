@@ -5,7 +5,9 @@ using Dalamud.Utility.Signatures;
 using FFXIVClientStructs.FFXIV.Client.Graphics.Scene;
 using OtterGui.Classes;
 using Penumbra.Collections;
+using Penumbra.GameData;
 using Penumbra.GameData.Enums;
+using Penumbra.Util;
 using ObjectType = FFXIVClientStructs.FFXIV.Client.Graphics.Scene.ObjectType;
 using static Penumbra.GameData.Enums.GenderRace;
 
@@ -86,17 +88,19 @@ public unsafe partial class PathResolver
 
         private delegate void UpdateModelDelegate( IntPtr drawObject );
 
-        [Signature( "48 8B ?? 56 48 83 ?? ?? ?? B9", DetourName = nameof( UpdateModelsDetour ) )]
+        [Signature( Sigs.UpdateModel, DetourName = nameof( UpdateModelsDetour ) )]
         private readonly Hook< UpdateModelDelegate > _updateModelsHook = null!;
 
         private void UpdateModelsDetour( IntPtr drawObject )
         {
             // Shortcut because this is called all the time.
             // Same thing is checked at the beginning of the original function.
-            if( *( int* )( drawObject + 0x90c ) == 0 )
+            if( *( int* )( drawObject + Offsets.UpdateModelSkip ) == 0 )
             {
                 return;
             }
+
+            using var performance = Penumbra.Performance.Measure( PerformanceType.UpdateModels );
 
             var       collection = GetResolveData( drawObject );
             using var eqp        = collection.ModCollection.TemporarilySetEqpFile();
@@ -122,19 +126,19 @@ public unsafe partial class PathResolver
         public static GenderRace GetHumanGenderRace( IntPtr human )
             => ( GenderRace )( ( Human* )human )->RaceSexId;
 
-        [Signature( "40 ?? 48 83 ?? ?? ?? 81 ?? ?? ?? ?? ?? 48 8B ?? 74 ?? ?? 83 ?? ?? ?? ?? ?? ?? 74 ?? 4C",
-            DetourName = nameof( GetEqpIndirectDetour ) )]
+        [Signature( Sigs.GetEqpIndirect, DetourName = nameof( GetEqpIndirectDetour ) )]
         private readonly Hook< OnModelLoadCompleteDelegate > _getEqpIndirectHook = null!;
 
         private void GetEqpIndirectDetour( IntPtr drawObject )
         {
             // Shortcut because this is also called all the time.
             // Same thing is checked at the beginning of the original function.
-            if( ( *( byte* )( drawObject + 0xa30 ) & 1 ) == 0 || *( ulong* )( drawObject + 0xa28 ) == 0 )
+            if( ( *( byte* )( drawObject + Offsets.GetEqpIndirectSkip1 ) & 1 ) == 0 || *( ulong* )( drawObject + Offsets.GetEqpIndirectSkip2 ) == 0 )
             {
                 return;
             }
 
+            using var performance = Penumbra.Performance.Measure( PerformanceType.GetEqp );
             var       resolveData = GetResolveData( drawObject );
             using var eqp         = resolveData.ModCollection.TemporarilySetEqpFile();
             _getEqpIndirectHook.Original( drawObject );
@@ -145,11 +149,12 @@ public unsafe partial class PathResolver
         // but it only applies a changed gmp file after a redraw for some reason.
         private delegate byte SetupVisorDelegate( IntPtr drawObject, ushort modelId, byte visorState );
 
-        [Signature( "48 8B ?? 53 55 57 48 83 ?? ?? 48 8B", DetourName = nameof( SetupVisorDetour ) )]
+        [Signature( Sigs.SetupVisor, DetourName = nameof( SetupVisorDetour ) )]
         private readonly Hook< SetupVisorDelegate > _setupVisorHook = null!;
 
         private byte SetupVisorDetour( IntPtr drawObject, ushort modelId, byte visorState )
         {
+            using var performance = Penumbra.Performance.Measure( PerformanceType.SetupVisor );
             var       resolveData = GetResolveData( drawObject );
             using var gmp         = resolveData.ModCollection.TemporarilySetGmpFile();
             return _setupVisorHook.Original( drawObject, modelId, visorState );
@@ -158,7 +163,7 @@ public unsafe partial class PathResolver
         // RSP
         private delegate void RspSetupCharacterDelegate( IntPtr drawObject, IntPtr unk2, float unk3, IntPtr unk4, byte unk5 );
 
-        [Signature( "48 89 5C 24 ?? 48 89 6C 24 ?? 48 89 74 24 ?? 88 54 24 ?? 57 41 56", DetourName = nameof( RspSetupCharacterDetour ) )]
+        [Signature( Sigs.RspSetupCharacter, DetourName = nameof( RspSetupCharacterDetour ) )]
         private readonly Hook< RspSetupCharacterDelegate > _rspSetupCharacterHook = null!;
 
         private void RspSetupCharacterDetour( IntPtr drawObject, IntPtr unk2, float unk3, IntPtr unk4, byte unk5 )
@@ -169,6 +174,7 @@ public unsafe partial class PathResolver
             }
             else
             {
+                using var performance = Penumbra.Performance.Measure( PerformanceType.SetupCharacter );
                 var       resolveData = GetResolveData( drawObject );
                 using var cmp         = resolveData.ModCollection.TemporarilySetCmpFile();
                 _rspSetupCharacterHook.Original( drawObject, unk2, unk3, unk4, unk5 );
@@ -179,11 +185,12 @@ public unsafe partial class PathResolver
         private          bool _inChangeCustomize;
         private delegate bool ChangeCustomizeDelegate( IntPtr human, IntPtr data, byte skipEquipment );
 
-        [Signature( "E8 ?? ?? ?? ?? 41 0F B6 C5 66 41 89 86", DetourName = nameof( ChangeCustomizeDetour ) )]
+        [Signature( Sigs.ChangeCustomize, DetourName = nameof( ChangeCustomizeDetour ) )]
         private readonly Hook< ChangeCustomizeDelegate > _changeCustomize = null!;
 
         private bool ChangeCustomizeDetour( IntPtr human, IntPtr data, byte skipEquipment )
         {
+            using var performance = Penumbra.Performance.Measure( PerformanceType.ChangeCustomize );
             _inChangeCustomize = true;
             var       resolveData = GetResolveData( human );
             using var cmp         = resolveData.ModCollection.TemporarilySetCmpFile();

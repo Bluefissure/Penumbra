@@ -10,6 +10,7 @@ using Penumbra.GameData.Enums;
 using Penumbra.Interop.Loader;
 using Penumbra.String;
 using Penumbra.String.Classes;
+using Penumbra.Util;
 
 namespace Penumbra.Interop.Resolver;
 
@@ -23,38 +24,40 @@ public partial class PathResolver : IDisposable
     public bool Enabled { get; private set; }
 
     private readonly         ResourceLoader            _loader;
-    private static readonly  CutsceneCharacters        Cutscenes   = new();
+    private static readonly  CutsceneCharacters        Cutscenes   = new(Penumbra.GameEvents);
     private static readonly  DrawObjectState           DrawObjects = new();
     private static readonly  BitArray                  ValidHumanModels;
-    internal static readonly IdentifiedCollectionCache IdentifiedCache = new();
+    internal static readonly IdentifiedCollectionCache IdentifiedCache = new(Penumbra.GameEvents);
     private readonly         AnimationState            _animations;
     private readonly         PathState                 _paths;
     private readonly         MetaState                 _meta;
-    private readonly         MaterialState             _materials;
+    private readonly         SubfileHelper             _subFiles;
 
     static PathResolver()
         => ValidHumanModels = GetValidHumanModels( Dalamud.GameData );
 
     public unsafe PathResolver( ResourceLoader loader )
     {
+        using var tApi = Penumbra.StartTimer.Measure( StartTimeType.PathResolver );
         SignatureHelper.Initialise( this );
         _loader     = loader;
         _animations = new AnimationState( DrawObjects );
         _paths      = new PathState( this );
         _meta       = new MetaState( _paths.HumanVTable );
-        _materials  = new MaterialState( _paths );
+        _subFiles   = new SubfileHelper( _loader, Penumbra.GameEvents );
     }
 
     // The modified resolver that handles game path resolving.
     private bool CharacterResolver( Utf8GamePath gamePath, ResourceCategory _1, ResourceType type, int _2, out (FullPath?, ResolveData) data )
     {
+        using var performance = Penumbra.Performance.Measure( PerformanceType.CharacterResolver );
         // Check if the path was marked for a specific collection,
         // or if it is a file loaded by a material, and if we are currently in a material load,
         // or if it is a face decal path and the current mod collection is set.
         // If not use the default collection.
         // We can remove paths after they have actually been loaded.
         // A potential next request will add the path anew.
-        var nonDefault = _materials.HandleSubFiles( type, out var resolveData )
+        var nonDefault = _subFiles.HandleSubFiles( type, out var resolveData )
          || _paths.Consume( gamePath.Path, out resolveData )
          || _animations.HandleFiles( type, gamePath, out resolveData )
          || DrawObjects.HandleDecalFile( type, gamePath, out resolveData );
@@ -69,8 +72,8 @@ public partial class PathResolver : IDisposable
         // Since mtrl files load their files separately, we need to add the new, resolved path
         // so that the functions loading tex and shpk can find that path and use its collection.
         // We also need to handle defaulted materials against a non-default collection.
-        var path = resolved == null ? gamePath.Path.ToString() : resolved.Value.FullName;
-        MaterialState.HandleCollection( resolveData, path, nonDefault, type, resolved, out data );
+        var path = resolved == null ? gamePath.Path : resolved.Value.InternalName;
+        SubfileHelper.HandleCollection( resolveData, path, nonDefault, type, resolved, out data );
         return true;
     }
 
@@ -88,7 +91,7 @@ public partial class PathResolver : IDisposable
         _animations.Enable();
         _paths.Enable();
         _meta.Enable();
-        _materials.Enable();
+        _subFiles.Enable();
 
         _loader.ResolvePathCustomization += CharacterResolver;
         Penumbra.Log.Debug( "Character Path Resolver enabled." );
@@ -108,7 +111,7 @@ public partial class PathResolver : IDisposable
         IdentifiedCache.Disable();
         _paths.Disable();
         _meta.Disable();
-        _materials.Disable();
+        _subFiles.Disable();
 
         _loader.ResolvePathCustomization -= CharacterResolver;
         Penumbra.Log.Debug( "Character Path Resolver disabled." );
@@ -123,7 +126,7 @@ public partial class PathResolver : IDisposable
         Cutscenes.Dispose();
         IdentifiedCache.Dispose();
         _meta.Dispose();
-        _materials.Dispose();
+        _subFiles.Dispose();
     }
 
     public static unsafe (IntPtr, ResolveData) IdentifyDrawObject( IntPtr drawObject )
@@ -169,4 +172,22 @@ public partial class PathResolver : IDisposable
 
     internal IEnumerable< KeyValuePair< int, global::Dalamud.Game.ClientState.Objects.Types.GameObject > > CutsceneActors
         => Cutscenes.Actors;
+
+    internal IEnumerable< KeyValuePair< IntPtr, ResolveData > > ResourceCollections
+        => _subFiles;
+
+    internal int SubfileCount
+        => _subFiles.Count;
+
+    internal ResolveData CurrentMtrlData
+        => _subFiles.MtrlData;
+
+    internal ResolveData CurrentAvfxData
+        => _subFiles.AvfxData;
+
+    internal ResolveData LastGameObjectData
+        => DrawObjects.LastCreatedCollection;
+
+    internal unsafe nint LastGameObject
+        => (nint) DrawObjects.LastGameObject;
 }

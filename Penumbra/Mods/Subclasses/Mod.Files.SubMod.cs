@@ -67,7 +67,7 @@ public partial class Mod
             _default.WriteTexToolsMeta( ModPath );
             foreach( var group in Groups )
             {
-                var dir = NewOptionDirectory( ModPath, group.Name );
+                var dir = Creator.NewOptionDirectory( ModPath, group.Name );
                 if( !dir.Exists )
                 {
                     dir.Create();
@@ -75,7 +75,7 @@ public partial class Mod
 
                 foreach( var option in group.OfType< SubMod >() )
                 {
-                    var optionDir = NewOptionDirectory( dir, option.Name );
+                    var optionDir = Creator.NewOptionDirectory( dir, option.Name );
                     if( !optionDir.Exists )
                     {
                         optionDir.Create();
@@ -106,6 +106,8 @@ public partial class Mod
 
         public string FullName
             => GroupIdx < 0 ? "Default Option" : $"{ParentMod.Groups[ GroupIdx ].Name}: {Name}";
+
+        public string Description { get; set; } = string.Empty;
 
         internal IMod ParentMod { get; private init; }
         internal int GroupIdx { get; private set; }
@@ -143,8 +145,9 @@ public partial class Mod
             ManipulationData.Clear();
 
             // Every option has a name, but priorities are only relevant for multi group options.
-            Name     = json[ nameof( ISubMod.Name ) ]?.ToObject< string >()    ?? string.Empty;
-            priority = json[ nameof( IModGroup.Priority ) ]?.ToObject< int >() ?? 0;
+            Name        = json[ nameof( ISubMod.Name ) ]?.ToObject< string >()        ?? string.Empty;
+            Description = json[ nameof( ISubMod.Description ) ]?.ToObject< string >() ?? string.Empty;
+            priority    = json[ nameof( IModGroup.Priority ) ]?.ToObject< int >()     ?? 0;
 
             var files = ( JObject? )json[ nameof( Files ) ];
             if( files != null )
@@ -173,7 +176,7 @@ public partial class Mod
             var manips = json[ nameof( Manipulations ) ];
             if( manips != null )
             {
-                foreach( var s in manips.Children().Select( c => c.ToObject< MetaManipulation >() ) )
+                foreach( var s in manips.Children().Select( c => c.ToObject< MetaManipulation >() ).Where( m => m.ManipulationType != MetaManipulation.Type.Unknown ) )
                 {
                     ManipulationData.Add( s );
                 }
@@ -182,7 +185,7 @@ public partial class Mod
 
         // If .meta or .rgsp files are encountered, parse them and incorporate their meta changes into the mod.
         // If delete is true, the files are deleted afterwards.
-        public bool IncorporateMetaChanges( DirectoryInfo basePath, bool delete )
+        public (bool Changes, List< string > DeleteList) IncorporateMetaChanges( DirectoryInfo basePath, bool delete )
         {
             var deleteList   = new List< string >();
             var oldSize      = ManipulationData.Count;
@@ -201,7 +204,7 @@ public partial class Mod
                             continue;
                         }
 
-                        var meta = new TexToolsMeta( File.ReadAllBytes( file.FullName ) );
+                        var meta = new TexToolsMeta( File.ReadAllBytes( file.FullName ), Penumbra.Config.KeepDefaultMetaChanges );
                         Penumbra.Log.Verbose( $"Incorporating {file} as Metadata file of {meta.MetaManipulations.Count} manipulations {deleteString}" );
                         deleteList.Add( file.FullName );
                         ManipulationData.UnionWith( meta.MetaManipulations );
@@ -214,7 +217,7 @@ public partial class Mod
                             continue;
                         }
 
-                        var rgsp = TexToolsMeta.FromRgspFile( file.FullName, File.ReadAllBytes( file.FullName ) );
+                        var rgsp = TexToolsMeta.FromRgspFile( file.FullName, File.ReadAllBytes( file.FullName ), Penumbra.Config.KeepDefaultMetaChanges );
                         Penumbra.Log.Verbose( $"Incorporating {file} as racial scaling file of {rgsp.MetaManipulations.Count} manipulations {deleteString}" );
                         deleteList.Add( file.FullName );
 
@@ -225,6 +228,17 @@ public partial class Mod
                 {
                     Penumbra.Log.Error( $"Could not incorporate meta changes in mod {basePath} from file {file.FullName}:\n{e}" );
                 }
+            }
+
+            DeleteDeleteList( deleteList, delete );
+            return ( oldSize < ManipulationData.Count, deleteList );
+        }
+
+        internal static void DeleteDeleteList( IEnumerable< string > deleteList, bool delete )
+        {
+            if( !delete )
+            {
+                return;
             }
 
             foreach( var file in deleteList )
@@ -238,8 +252,6 @@ public partial class Mod
                     Penumbra.Log.Error( $"Could not delete incorporated meta file {file}:\n{e}" );
                 }
             }
-
-            return oldSize < ManipulationData.Count;
         }
 
         public void WriteTexToolsMeta( DirectoryInfo basePath, bool test = false )
@@ -274,7 +286,9 @@ public partial class Mod
             {
                 try
                 {
-                    var x = file.EndsWith( "rgsp" ) ? TexToolsMeta.FromRgspFile( file, data ) : new TexToolsMeta( data );
+                    var x = file.EndsWith( "rgsp" )
+                        ? TexToolsMeta.FromRgspFile( file, data, Penumbra.Config.KeepDefaultMetaChanges )
+                        : new TexToolsMeta( data, Penumbra.Config.KeepDefaultMetaChanges );
                     meta.UnionWith( x.MetaManipulations );
                 }
                 catch

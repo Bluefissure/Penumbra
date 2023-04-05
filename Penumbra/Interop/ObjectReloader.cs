@@ -7,7 +7,8 @@ using Dalamud.Game.ClientState.Objects.SubKinds;
 using Dalamud.Game.ClientState.Objects.Types;
 using Penumbra.Api;
 using Penumbra.Api.Enums;
-using Penumbra.GameData.Enums;
+using Penumbra.GameData;
+using Penumbra.GameData.Actors;
 using Penumbra.Interop.Structs;
 
 namespace Penumbra.Interop;
@@ -24,10 +25,10 @@ public unsafe partial class ObjectReloader
 
     // VFuncs that disable and enable draw, used only for GPose actors.
     private static void DisableDraw( GameObject actor )
-        => ( ( delegate* unmanaged< IntPtr, void >** )actor.Address )[ 0 ][ 17 ]( actor.Address );
+        => ( ( delegate* unmanaged< IntPtr, void >** )actor.Address )[ 0 ][ Offsets.DisableDrawVfunc ]( actor.Address );
 
     private static void EnableDraw( GameObject actor )
-        => ( ( delegate* unmanaged< IntPtr, void >** )actor.Address )[ 0 ][ 16 ]( actor.Address );
+        => ( ( delegate* unmanaged< IntPtr, void >** )actor.Address )[ 0 ][ Offsets.EnableDrawVfunc ]( actor.Address );
 
     // Check whether we currently are in GPose.
     // Also clear the name list.
@@ -99,7 +100,7 @@ public unsafe partial class ObjectReloader
         }
 
         tableIndex = ObjectTableIndex( actor );
-        return tableIndex is >= 240 and < 245;
+        return tableIndex is >= (int) ScreenActor.CharacterScreen and <= ( int) ScreenActor.Card8;
     }
 }
 
@@ -118,7 +119,7 @@ public sealed unsafe partial class ObjectReloader : IDisposable
         => Dalamud.Framework.Update -= OnUpdateEvent;
 
     public static DrawState* ActorDrawState( GameObject actor )
-        => ( DrawState* )( actor.Address + 0x0104 );
+        => ( DrawState* )( &( ( FFXIVClientStructs.FFXIV.Client.Game.Object.GameObject* )actor.Address )->RenderFlags );
 
     private static int ObjectTableIndex( GameObject actor )
         => ( ( FFXIVClientStructs.FFXIV.Client.Game.Object.GameObject* )actor.Address )->ObjectIndex;
@@ -316,7 +317,7 @@ public sealed unsafe partial class ObjectReloader : IDisposable
         return gPosePlayer ?? Dalamud.Objects[ 0 ];
     }
 
-    private static bool GetName( string lowerName, out GameObject? actor )
+    public static bool GetName( string lowerName, out GameObject? actor )
     {
         ( actor, var ret ) = lowerName switch
         {

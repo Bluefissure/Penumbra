@@ -9,8 +9,10 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 using System.Numerics;
+using Dalamud.Utility;
 using Penumbra.Api.Enums;
 using Penumbra.Api.Helpers;
+using Penumbra.Collections;
 using Penumbra.String;
 using Penumbra.String.Classes;
 using Penumbra.Meta.Manipulations;
@@ -310,6 +312,9 @@ public class IpcTester : IDisposable
         private bool           _subscribedToClick   = false;
         private string         _lastClicked         = string.Empty;
         private string         _lastHovered         = string.Empty;
+        private TabType        _selectTab           = TabType.None;
+        private string         _modName             = string.Empty;
+        private PenumbraApiEc  _ec                  = PenumbraApiEc.Success;
 
         public Ui( DalamudPluginInterface pi )
         {
@@ -328,6 +333,21 @@ public class IpcTester : IDisposable
                 return;
             }
 
+            using( var combo = ImRaii.Combo( "Tab to Open at", _selectTab.ToString() ) )
+            {
+                if( combo )
+                {
+                    foreach( var val in Enum.GetValues< TabType >() )
+                    {
+                        if( ImGui.Selectable( val.ToString(), _selectTab == val ) )
+                        {
+                            _selectTab = val;
+                        }
+                    }
+                }
+            }
+
+            ImGui.InputTextWithHint( "##openMod", "Mod to Open at...", ref _modName, 256 );
             using var table = ImRaii.Table( string.Empty, 3, ImGuiTableFlags.SizingFixedFit );
             if( !table )
             {
@@ -368,6 +388,20 @@ public class IpcTester : IDisposable
 
             ImGui.SameLine();
             ImGui.TextUnformatted( _lastClicked );
+            DrawIntro( Ipc.OpenMainWindow.Label, "Open Mod Window" );
+            if( ImGui.Button( "Open##window" ) )
+            {
+                _ec = Ipc.OpenMainWindow.Subscriber( _pi ).Invoke( _selectTab, _modName, _modName );
+            }
+
+            ImGui.SameLine();
+            ImGui.TextUnformatted( _ec.ToString() );
+
+            DrawIntro( Ipc.CloseMainWindow.Label, "Close Mod Window" );
+            if( ImGui.Button( "Close##window" ) )
+            {
+                Ipc.CloseMainWindow.Subscriber( _pi ).Invoke();
+            }
         }
 
         private void UpdateLastDrawnMod( string name )
@@ -676,6 +710,32 @@ public class IpcTester : IDisposable
                     }
                 }
             }
+
+            DrawIntro( Ipc.ResolvePlayerPaths.Label, "Resolved Paths (Player)" );
+            if( _currentResolvePath.Length > 0 || _currentReversePath.Length > 0 )
+            {
+                var forwardArray = _currentResolvePath.Length > 0 ? new[] { _currentResolvePath } : Array.Empty< string >();
+                var reverseArray = _currentReversePath.Length > 0 ? new[] { _currentReversePath } : Array.Empty< string >();
+                var ret          = Ipc.ResolvePlayerPaths.Subscriber( _pi ).Invoke( forwardArray, reverseArray );
+                var text         = string.Empty;
+                if( ret.Item1.Length > 0 )
+                {
+                    if( ret.Item2.Length > 0 )
+                    {
+                        text = $"Forward: {ret.Item1[ 0 ]} | Reverse: {string.Join( "; ", ret.Item2[ 0 ] )}.";
+                    }
+                    else
+                    {
+                        text = $"Forward: {ret.Item1[ 0 ]}.";
+                    }
+                }
+                else if( ret.Item2.Length > 0 )
+                {
+                    text = $"Reverse: {string.Join( "; ", ret.Item2[ 0 ] )}.";
+                }
+
+                ImGui.TextUnformatted( text );
+            }
         }
     }
 
@@ -683,10 +743,18 @@ public class IpcTester : IDisposable
     {
         private readonly DalamudPluginInterface _pi;
 
+        private int               _objectIdx      = 0;
+        private string            _collectionName = string.Empty;
+        private bool              _allowCreation  = true;
+        private bool              _allowDeletion  = true;
+        private ApiCollectionType _type           = ApiCollectionType.Current;
+
         private string                                 _characterCollectionName = string.Empty;
         private IList< string >                        _collections             = new List< string >();
         private string                                 _changedItemCollection   = string.Empty;
         private IReadOnlyDictionary< string, object? > _changedItems            = new Dictionary< string, object? >();
+        private PenumbraApiEc                          _returnCode              = PenumbraApiEc.Success;
+        private string?                                _oldCollection           = null;
 
         public Collections( DalamudPluginInterface pi )
             => _pi = pi;
@@ -699,10 +767,23 @@ public class IpcTester : IDisposable
                 return;
             }
 
+            ImGuiUtil.GenericEnumCombo( "Collection Type", 200, _type, out _type, t => ( ( CollectionType )t ).ToName() );
+            ImGui.InputInt( "Object Index##Collections", ref _objectIdx, 0, 0 );
+            ImGui.InputText( "Collection Name##Collections", ref _collectionName, 64 );
+            ImGui.Checkbox( "Allow Assignment Creation", ref _allowCreation );
+            ImGui.SameLine();
+            ImGui.Checkbox( "Allow Assignment Deletion", ref _allowDeletion );
+
             using var table = ImRaii.Table( string.Empty, 3, ImGuiTableFlags.SizingFixedFit );
             if( !table )
             {
                 return;
+            }
+
+            DrawIntro( "Last Return Code", _returnCode.ToString() );
+            if( _oldCollection != null )
+            {
+                ImGui.TextUnformatted( _oldCollection.Length == 0 ? "Created" : _oldCollection );
             }
 
             DrawIntro( Ipc.GetCurrentCollectionName.Label, "Current Collection" );
@@ -723,6 +804,30 @@ public class IpcTester : IDisposable
             {
                 _collections = Ipc.GetCollections.Subscriber( _pi ).Invoke();
                 ImGui.OpenPopup( "Collections" );
+            }
+
+            DrawIntro( Ipc.GetCollectionForType.Label, "Get Special Collection" );
+            var name = Ipc.GetCollectionForType.Subscriber( _pi ).Invoke( _type );
+            ImGui.TextUnformatted( name.Length == 0 ? "Unassigned" : name );
+            DrawIntro( Ipc.SetCollectionForType.Label, "Set Special Collection" );
+            if( ImGui.Button( "Set##TypeCollection" ) )
+            {
+                ( _returnCode, _oldCollection ) = Ipc.SetCollectionForType.Subscriber( _pi ).Invoke( _type, _collectionName, _allowCreation, _allowDeletion );
+            }
+
+            DrawIntro( Ipc.GetCollectionForObject.Label, "Get Object Collection" );
+            ( var valid, var individual, name ) = Ipc.GetCollectionForObject.Subscriber( _pi ).Invoke( _objectIdx );
+            ImGui.TextUnformatted(
+                $"{( valid ? "Valid" : "Invalid" )} Object, {( name.Length == 0 ? "Unassigned" : name )}{( individual ? " (Individual Assignment)" : string.Empty )}" );
+            DrawIntro( Ipc.SetCollectionForObject.Label, "Set Object Collection" );
+            if( ImGui.Button( "Set##ObjectCollection" ) )
+            {
+                ( _returnCode, _oldCollection ) = Ipc.SetCollectionForObject.Subscriber( _pi ).Invoke( _objectIdx, _collectionName, _allowCreation, _allowDeletion );
+            }
+
+            if( _returnCode == PenumbraApiEc.NothingChanged && _oldCollection.IsNullOrEmpty() )
+            {
+                _oldCollection = null;
             }
 
             DrawIntro( Ipc.GetChangedItems.Label, "Changed Item List" );
@@ -1089,6 +1194,7 @@ public class IpcTester : IDisposable
             {
                 _lastSettingsError = Ipc.CopyModSettings.Subscriber( _pi ).Invoke( _settingsCollection, _settingsModDirectory, _settingsModName );
             }
+
             ImGuiUtil.HoverTooltip( "Copy settings from Mod Directory Name to Mod Name (as directory) in collection." );
 
             DrawIntro( Ipc.TrySetModSetting.Label, "Set Setting(s)" );

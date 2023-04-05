@@ -33,7 +33,7 @@ public partial class ConfigWindow
 
     // Draw the name of a resource file.
     private static unsafe void Text( ResourceHandle* resource )
-        => Text( resource->FileName(), resource->FileNameLength );
+        => Text( resource->FileName().Path, resource->FileNameLength );
 
     // Draw a ByteString as a selectable.
     internal static unsafe bool Selectable( ByteString s, bool selected )
@@ -122,7 +122,7 @@ public partial class ConfigWindow
         public void Draw( string label, float width, int individualIdx )
         {
             var (_, collection) = Penumbra.CollectionManager.Individuals[ individualIdx ];
-            if( Draw( label, collection.Name, width, ImGui.GetTextLineHeightWithSpacing() ) && CurrentSelection != null )
+            if( Draw( label, collection.Name, string.Empty, width, ImGui.GetTextLineHeightWithSpacing() ) && CurrentSelection != null )
             {
                 Penumbra.CollectionManager.SetCollection( CurrentSelection, CollectionType.Individual, individualIdx );
             }
@@ -131,7 +131,7 @@ public partial class ConfigWindow
         public void Draw( string label, float width, CollectionType type )
         {
             var current = Penumbra.CollectionManager.ByType( type, ActorIdentifier.Invalid );
-            if( Draw( label, current?.Name ?? string.Empty, width, ImGui.GetTextLineHeightWithSpacing() ) && CurrentSelection != null )
+            if( Draw( label, current?.Name ?? string.Empty, string.Empty, width, ImGui.GetTextLineHeightWithSpacing() ) && CurrentSelection != null )
             {
                 Penumbra.CollectionManager.SetCollection( CurrentSelection, type );
             }

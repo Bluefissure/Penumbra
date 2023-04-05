@@ -33,7 +33,7 @@ public partial class ConfigWindow
                 => obj.Value;
 
             public bool Draw( float width )
-                => Draw( "##worldCombo", CurrentSelection.Value, width, ImGui.GetTextLineHeightWithSpacing() );
+                => Draw( "##worldCombo", CurrentSelection.Value, string.Empty, width, ImGui.GetTextLineHeightWithSpacing() );
         }
 
         private sealed class NpcCombo : FilterComboCache< (string Name, uint[] Ids) >
@@ -60,7 +60,7 @@ public partial class ConfigWindow
             }
 
             public bool Draw( float width )
-                => Draw( _label, CurrentSelection.Name, width, ImGui.GetTextLineHeightWithSpacing() );
+                => Draw( _label, CurrentSelection.Name, string.Empty, width, ImGui.GetTextLineHeightWithSpacing() );
         }
 
 
@@ -130,7 +130,7 @@ public partial class ConfigWindow
             {
                 var (name, _) = Penumbra.CollectionManager.Individuals[ i ];
                 using var id = ImRaii.PushId( i );
-                CollectionsWithEmpty.Draw( string.Empty, _window._inputTextWidth.X, i );
+                CollectionsWithEmpty.Draw( "##IndividualCombo", _window._inputTextWidth.X, i );
                 ImGui.SameLine();
                 if( ImGuiUtil.DrawDisabledButton( FontAwesomeIcon.Trash.ToIconString(), _window._iconButtonSize, string.Empty,
                        false, true ) )
@@ -243,7 +243,10 @@ public partial class ConfigWindow
             var buttonWidth1 = new Vector2( 90  * ImGuiHelpers.GlobalScale, 0 );
             var buttonWidth2 = new Vector2( 120 * ImGuiHelpers.GlobalScale, 0 );
 
-            var change = DrawNewCurrentPlayerCollection();
+            var assignWidth = new Vector2( ( _window._inputTextWidth.X - ImGui.GetStyle().ItemSpacing.X ) / 2, 0 );
+            var change      = DrawNewCurrentPlayerCollection( assignWidth );
+            ImGui.SameLine();
+            change |= DrawNewTargetCollection( assignWidth );
 
             change |= DrawNewPlayerCollection( buttonWidth1, width );
             ImGui.SameLine();
@@ -260,7 +263,7 @@ public partial class ConfigWindow
             }
         }
 
-        private bool DrawNewCurrentPlayerCollection()
+        private static bool DrawNewCurrentPlayerCollection( Vector2 width )
         {
             var player = Penumbra.Actors.GetCurrentPlayer();
             var result = Penumbra.CollectionManager.Individuals.CanAdd( player );
@@ -272,9 +275,30 @@ public partial class ConfigWindow
                 _                                          => string.Empty,
             };
 
-            if( ImGuiUtil.DrawDisabledButton( "Assign Currently Played Character", _window._inputTextWidth, tt, result != IndividualCollections.AddResult.Valid ) )
+
+            if( ImGuiUtil.DrawDisabledButton( "Assign Current Player", width, tt, result != IndividualCollections.AddResult.Valid ) )
             {
-                Penumbra.CollectionManager.Individuals.Add( new[] { player }, Penumbra.CollectionManager.Default );
+                Penumbra.CollectionManager.CreateIndividualCollection( player );
+                return true;
+            }
+
+            return false;
+        }
+
+        private static bool DrawNewTargetCollection( Vector2 width )
+        {
+            var target = Penumbra.Actors.FromObject( Dalamud.Targets.Target, false, true, true );
+            var result = Penumbra.CollectionManager.Individuals.CanAdd( target );
+            var tt = result switch
+            {
+                IndividualCollections.AddResult.Valid      => $"Assign a collection to {target}.",
+                IndividualCollections.AddResult.AlreadySet => AlreadyAssigned,
+                IndividualCollections.AddResult.Invalid    => "No valid character in target detected.",
+                _                                          => string.Empty,
+            };
+            if( ImGuiUtil.DrawDisabledButton( "Assign Current Target", width, tt, result != IndividualCollections.AddResult.Valid ) )
+            {
+                Penumbra.CollectionManager.CreateIndividualCollection( Penumbra.CollectionManager.Individuals.GetGroup( target ) );
                 return true;
             }
 
@@ -297,7 +321,7 @@ public partial class ConfigWindow
                     IndividualCollections.AddResult.AlreadySet => AlreadyAssigned,
                     _                                          => string.Empty,
                 };
-            _newRetainerTooltip = Penumbra.CollectionManager.Individuals.CanAdd( IdentifierType.Retainer, _newCharacterName, _worldCombo.CurrentSelection.Key, ObjectKind.None,
+            _newRetainerTooltip = Penumbra.CollectionManager.Individuals.CanAdd( IdentifierType.Retainer, _newCharacterName, 0, ObjectKind.None,
                     Array.Empty< uint >(), out _newRetainerIdentifiers ) switch
                 {
                     _ when _newCharacterName.Length == 0       => NewRetainerTooltipEmpty,

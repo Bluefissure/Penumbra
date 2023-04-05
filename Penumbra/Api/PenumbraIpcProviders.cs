@@ -29,10 +29,12 @@ public class PenumbraIpcProviders : IDisposable
     internal readonly EventProvider< string, bool > ModDirectoryChanged;
 
     // UI
-    internal readonly EventProvider< string >                             PreSettingsDraw;
-    internal readonly EventProvider< string >                             PostSettingsDraw;
-    internal readonly EventProvider< ChangedItemType, uint >              ChangedItemTooltip;
-    internal readonly EventProvider< MouseButton, ChangedItemType, uint > ChangedItemClick;
+    internal readonly EventProvider< string >                                PreSettingsDraw;
+    internal readonly EventProvider< string >                                PostSettingsDraw;
+    internal readonly EventProvider< ChangedItemType, uint >                 ChangedItemTooltip;
+    internal readonly EventProvider< MouseButton, ChangedItemType, uint >    ChangedItemClick;
+    internal readonly FuncProvider< TabType, string, string, PenumbraApiEc > OpenMainWindow;
+    internal readonly ActionProvider                                         CloseMainWindow;
 
     // Redrawing
     internal readonly ActionProvider< RedrawType >             RedrawAll;
@@ -49,22 +51,27 @@ public class PenumbraIpcProviders : IDisposable
     internal readonly EventProvider< nint, string, string >           GameObjectResourcePathResolved;
 
     // Resolve
-    internal readonly FuncProvider< string, string >           ResolveDefaultPath;
-    internal readonly FuncProvider< string, string >           ResolveInterfacePath;
-    internal readonly FuncProvider< string, string >           ResolvePlayerPath;
-    internal readonly FuncProvider< string, int, string >      ResolveGameObjectPath;
-    internal readonly FuncProvider< string, string, string >   ResolveCharacterPath;
-    internal readonly FuncProvider< string, string, string[] > ReverseResolvePath;
-    internal readonly FuncProvider< string, int, string[] >    ReverseResolveGameObjectPath;
-    internal readonly FuncProvider< string, string[] >         ReverseResolvePlayerPath;
+    internal readonly FuncProvider< string, string >                             ResolveDefaultPath;
+    internal readonly FuncProvider< string, string >                             ResolveInterfacePath;
+    internal readonly FuncProvider< string, string >                             ResolvePlayerPath;
+    internal readonly FuncProvider< string, int, string >                        ResolveGameObjectPath;
+    internal readonly FuncProvider< string, string, string >                     ResolveCharacterPath;
+    internal readonly FuncProvider< string, string, string[] >                   ReverseResolvePath;
+    internal readonly FuncProvider< string, int, string[] >                      ReverseResolveGameObjectPath;
+    internal readonly FuncProvider< string, string[] >                           ReverseResolvePlayerPath;
+    internal readonly FuncProvider< string[], string[], (string[], string[][]) > ResolvePlayerPaths;
 
     // Collections
-    internal readonly FuncProvider< IList< string > >                                GetCollections;
-    internal readonly FuncProvider< string >                                         GetCurrentCollectionName;
-    internal readonly FuncProvider< string >                                         GetDefaultCollectionName;
-    internal readonly FuncProvider< string >                                         GetInterfaceCollectionName;
-    internal readonly FuncProvider< string, (string, bool) >                         GetCharacterCollectionName;
-    internal readonly FuncProvider< string, IReadOnlyDictionary< string, object? > > GetChangedItems;
+    internal readonly FuncProvider< IList< string > >                                                GetCollections;
+    internal readonly FuncProvider< string >                                                         GetCurrentCollectionName;
+    internal readonly FuncProvider< string >                                                         GetDefaultCollectionName;
+    internal readonly FuncProvider< string >                                                         GetInterfaceCollectionName;
+    internal readonly FuncProvider< string, (string, bool) >                                         GetCharacterCollectionName;
+    internal readonly FuncProvider< ApiCollectionType, string >                                      GetCollectionForType;
+    internal readonly FuncProvider< ApiCollectionType, string, bool, bool, (PenumbraApiEc, string) > SetCollectionForType;
+    internal readonly FuncProvider< int, (bool, bool, string) >                                      GetCollectionForObject;
+    internal readonly FuncProvider< int, string, bool, bool, (PenumbraApiEc, string) >               SetCollectionForObject;
+    internal readonly FuncProvider< string, IReadOnlyDictionary< string, object? > >                 GetChangedItems;
 
     // Meta
     internal readonly FuncProvider< string >         GetPlayerMetaManipulations;
@@ -126,6 +133,8 @@ public class PenumbraIpcProviders : IDisposable
         PostSettingsDraw   = Ipc.PostSettingsDraw.Provider( pi, a => Api.PostSettingsPanelDraw += a, a => Api.PostSettingsPanelDraw       -= a );
         ChangedItemTooltip = Ipc.ChangedItemTooltip.Provider( pi, () => Api.ChangedItemTooltip += OnTooltip, () => Api.ChangedItemTooltip -= OnTooltip );
         ChangedItemClick   = Ipc.ChangedItemClick.Provider( pi, () => Api.ChangedItemClicked   += OnClick, () => Api.ChangedItemClicked   -= OnClick );
+        OpenMainWindow     = Ipc.OpenMainWindow.Provider( pi, Api.OpenMainWindow );
+        CloseMainWindow    = Ipc.CloseMainWindow.Provider( pi, Api.CloseMainWindow );
 
         // Redrawing
         RedrawAll           = Ipc.RedrawAll.Provider( pi, Api.RedrawAll );
@@ -156,6 +165,7 @@ public class PenumbraIpcProviders : IDisposable
         ReverseResolvePath           = Ipc.ReverseResolvePath.Provider( pi, Api.ReverseResolvePath );
         ReverseResolveGameObjectPath = Ipc.ReverseResolveGameObjectPath.Provider( pi, Api.ReverseResolveGameObjectPath );
         ReverseResolvePlayerPath     = Ipc.ReverseResolvePlayerPath.Provider( pi, Api.ReverseResolvePlayerPath );
+        ResolvePlayerPaths           = Ipc.ResolvePlayerPaths.Provider( pi, Api.ResolvePlayerPaths );
 
         // Collections
         GetCollections             = Ipc.GetCollections.Provider( pi, Api.GetCollections );
@@ -163,6 +173,10 @@ public class PenumbraIpcProviders : IDisposable
         GetDefaultCollectionName   = Ipc.GetDefaultCollectionName.Provider( pi, Api.GetDefaultCollection );
         GetInterfaceCollectionName = Ipc.GetInterfaceCollectionName.Provider( pi, Api.GetInterfaceCollection );
         GetCharacterCollectionName = Ipc.GetCharacterCollectionName.Provider( pi, Api.GetCharacterCollection );
+        GetCollectionForType       = Ipc.GetCollectionForType.Provider( pi, Api.GetCollectionForType );
+        SetCollectionForType       = Ipc.SetCollectionForType.Provider( pi, Api.SetCollectionForType );
+        GetCollectionForObject     = Ipc.GetCollectionForObject.Provider( pi, Api.GetCollectionForObject );
+        SetCollectionForObject     = Ipc.SetCollectionForObject.Provider( pi, Api.SetCollectionForObject );
         GetChangedItems            = Ipc.GetChangedItems.Provider( pi, Api.GetChangedItemsForCollection );
 
         // Meta
@@ -189,7 +203,7 @@ public class PenumbraIpcProviders : IDisposable
         TrySetModPriority       = Ipc.TrySetModPriority.Provider( pi, Api.TrySetModPriority );
         TrySetModSetting        = Ipc.TrySetModSetting.Provider( pi, Api.TrySetModSetting );
         TrySetModSettings       = Ipc.TrySetModSettings.Provider( pi, Api.TrySetModSettings );
-        ModSettingChanged       = Ipc.ModSettingChanged.Provider( pi,
+        ModSettingChanged = Ipc.ModSettingChanged.Provider( pi,
             () => Api.ModSettingChanged += ModSettingChangedEvent,
             () => Api.ModSettingChanged -= ModSettingChangedEvent );
         CopyModSettings = Ipc.CopyModSettings.Provider( pi, Api.CopyModSettings );
@@ -231,6 +245,8 @@ public class PenumbraIpcProviders : IDisposable
         PostSettingsDraw.Dispose();
         ChangedItemTooltip.Dispose();
         ChangedItemClick.Dispose();
+        OpenMainWindow.Dispose();
+        CloseMainWindow.Dispose();
 
         // Redrawing
         RedrawAll.Dispose();
@@ -255,6 +271,7 @@ public class PenumbraIpcProviders : IDisposable
         ReverseResolvePath.Dispose();
         ReverseResolveGameObjectPath.Dispose();
         ReverseResolvePlayerPath.Dispose();
+        ResolvePlayerPaths.Dispose();
 
         // Collections
         GetCollections.Dispose();
@@ -262,6 +279,10 @@ public class PenumbraIpcProviders : IDisposable
         GetDefaultCollectionName.Dispose();
         GetInterfaceCollectionName.Dispose();
         GetCharacterCollectionName.Dispose();
+        GetCollectionForType.Dispose();
+        SetCollectionForType.Dispose();
+        GetCollectionForObject.Dispose();
+        SetCollectionForObject.Dispose();
         GetChangedItems.Dispose();
 
         // Meta

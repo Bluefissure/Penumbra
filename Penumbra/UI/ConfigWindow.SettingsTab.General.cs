@@ -27,8 +27,42 @@ public partial class ConfigWindow
             ImGuiUtil.LabeledHelpMarker( label, tooltip );
         }
 
+        private static int _singleGroupRadioMax = int.MaxValue;
+
+        private void DrawSingleSelectRadioMax()
+        {
+            if( _singleGroupRadioMax == int.MaxValue )
+            {
+                _singleGroupRadioMax = Penumbra.Config.SingleGroupRadioMax;
+            }
+
+            ImGui.SetNextItemWidth( _window._inputTextWidth.X );
+            if( ImGui.DragInt( "##SingleSelectRadioMax", ref _singleGroupRadioMax, 0.01f, 1 ) )
+            {
+                _singleGroupRadioMax = Math.Max( 1, _singleGroupRadioMax );
+            }
+
+            if( ImGui.IsItemDeactivated() )
+            {
+                if( _singleGroupRadioMax != Penumbra.Config.SingleGroupRadioMax )
+                {
+                    Penumbra.Config.SingleGroupRadioMax = _singleGroupRadioMax;
+                    Penumbra.Config.Save();
+                }
+
+                _singleGroupRadioMax = int.MaxValue;
+            }
+
+            ImGuiUtil.LabeledHelpMarker( "Upper Limit for Single-Selection Group Radio Buttons",
+                "All Single-Selection Groups with more options than specified here will be displayed as Combo-Boxes at the top.\n"
+              + "All other Single-Selection Groups will be displayed as a set of Radio-Buttons." );
+        }
+
         private void DrawModSelectorSettings()
         {
+#if DEBUG
+            ImGui.NewLine(); // Due to the timing button.
+#endif
             if( !ImGui.CollapsingHeader( "General" ) )
             {
                 OpenTutorial( BasicTutorialSteps.GeneralSettings );
@@ -59,6 +93,10 @@ public partial class ConfigWindow
                     Dalamud.PluginInterface.UiBuilder.DisableGposeUiHide = !v;
                 } );
             ImGui.Dummy( _window._defaultSpace );
+
+            Checkbox( "Print Chat Command Success Messages to Chat",
+                "Chat Commands usually print messages on failure but also on success to confirm your action. You can disable this here.",
+                Penumbra.Config.PrintSuccessfulCommandsToChat, v => Penumbra.Config.PrintSuccessfulCommandsToChat = v );
             Checkbox( "Hide Redraw Bar in Mod Panel", "Hides the lower redraw buttons in the mod panel in your Mods tab.",
                 Penumbra.Config.HideRedrawBar, v => Penumbra.Config.HideRedrawBar = v );
             ImGui.Dummy( _window._defaultSpace );
@@ -71,6 +109,8 @@ public partial class ConfigWindow
             Checkbox( $"Use {AssignedCollections} in Try-On Window",
                 "Use the individual collection for your character's name in your try-on, dye preview or glamour plate window, if it is set.",
                 Penumbra.Config.UseCharacterCollectionInTryOn, v => Penumbra.Config.UseCharacterCollectionInTryOn = v );
+            Checkbox( "Use No Mods in Inspect Windows", "Use the empty collection for characters you are inspecting, regardless of the character.\n"
+              + "Takes precedence before the next option.", Penumbra.Config.UseNoModsInInspect, v => Penumbra.Config.UseNoModsInInspect = v );
             Checkbox( $"Use {AssignedCollections} in Inspect Windows",
                 "Use the appropriate individual collection for the character you are currently inspecting, based on their name.",
                 Penumbra.Config.UseCharacterCollectionInInspect, v => Penumbra.Config.UseCharacterCollectionInInspect = v );
@@ -78,6 +118,7 @@ public partial class ConfigWindow
                 "Use the owner's name to determine the appropriate individual collection for mounts, companions, accessories and combat pets.",
                 Penumbra.Config.UseOwnerNameForCharacterCollection, v => Penumbra.Config.UseOwnerNameForCharacterCollection = v );
             ImGui.Dummy( _window._defaultSpace );
+            DrawSingleSelectRadioMax();
             DrawFolderSortType();
             DrawAbsoluteSizeSelector();
             DrawRelativeSizeSelector();

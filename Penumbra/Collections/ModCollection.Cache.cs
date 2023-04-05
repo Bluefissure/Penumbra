@@ -5,6 +5,7 @@ using Penumbra.Meta.Manipulations;
 using Penumbra.Mods;
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using Penumbra.Api.Enums;
 using Penumbra.String.Classes;
@@ -102,6 +103,33 @@ public partial class ModCollection
             }
 
             return iterator;
+        }
+
+        // Reverse resolve multiple paths at once for efficiency.
+        public HashSet< Utf8GamePath >[] ReverseResolvePaths( IReadOnlyCollection< string > fullPaths )
+        {
+            if( fullPaths.Count == 0 )
+                return Array.Empty< HashSet< Utf8GamePath > >();
+
+            var ret  = new HashSet< Utf8GamePath >[fullPaths.Count];
+            var dict = new Dictionary< FullPath, int >( fullPaths.Count );
+            foreach( var (path, idx) in fullPaths.WithIndex() )
+            {
+                dict[ new FullPath(path) ] = idx;
+                ret[ idx ] = !Path.IsPathRooted( path ) && Utf8GamePath.FromString( path, out var utf8 )
+                    ? new HashSet< Utf8GamePath > { utf8 }
+                    : new HashSet< Utf8GamePath >();
+            }
+
+            foreach( var (game, full) in ResolvedFiles )
+            {
+                if( dict.TryGetValue( full.Path, out var idx ) )
+                {
+                    ret[ idx ].Add( game );
+                }
+            }
+
+            return ret;
         }
 
         private void OnModSettingChange( ModSettingChange type, int modIdx, int oldValue, int groupIdx, bool _ )
@@ -474,25 +502,40 @@ public partial class ModCollection
                 // Skip IMCs because they would result in far too many false-positive items,
                 // since they are per set instead of per item-slot/item/variant.
                 var identifier = Penumbra.Identifier;
-                foreach( var (resolved, modPath) in ResolvedFiles.Where( file => !file.Key.Path.EndsWith( "imc"u8 ) ) )
+                var items      = new SortedList< string, object? >( 512 );
+
+                void AddItems( IMod mod )
                 {
-                    foreach( var (name, obj) in identifier.Identify( resolved.ToString() ) )
+                    foreach( var (name, obj) in items )
                     {
                         if( !_changedItems.TryGetValue( name, out var data ) )
                         {
-                            _changedItems.Add( name, ( new SingleArray< IMod >( modPath.Mod ), obj ) );
+                            _changedItems.Add( name, ( new SingleArray< IMod >( mod ), obj ) );
                         }
-                        else if( !data.Item1.Contains( modPath.Mod ) )
+                        else if( !data.Item1.Contains( mod ) )
                         {
-                            _changedItems[ name ] = ( data.Item1.Append( modPath.Mod ), obj is int x && data.Item2 is int y ? x + y : obj );
+                            _changedItems[ name ] = ( data.Item1.Append( mod ), obj is int x && data.Item2 is int y ? x + y : obj );
                         }
                         else if( obj is int x && data.Item2 is int y )
                         {
                             _changedItems[ name ] = ( data.Item1, x + y );
                         }
                     }
+
+                    items.Clear();
                 }
-                // TODO: Meta Manipulations
+
+                foreach( var (resolved, modPath) in ResolvedFiles.Where( file => !file.Key.Path.EndsWith( "imc"u8 ) ) )
+                {
+                    identifier.Identify( items, resolved.ToString() );
+                    AddItems( modPath.Mod );
+                }
+
+                foreach( var (manip, mod) in MetaManipulations )
+                {
+                    Mod.ComputeChangedItems( items, manip );
+                    AddItems( mod );
+                }
             }
             catch( Exception e )
             {

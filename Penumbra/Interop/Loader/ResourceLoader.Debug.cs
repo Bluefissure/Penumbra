@@ -5,11 +5,14 @@ using Dalamud.Hooking;
 using Dalamud.Utility.Signatures;
 using FFXIVClientStructs.FFXIV.Client.System.Resource;
 using FFXIVClientStructs.FFXIV.Client.System.Resource.Handle;
+using FFXIVClientStructs.Interop;
 using FFXIVClientStructs.STD;
 using Penumbra.Collections;
+using Penumbra.GameData;
 using Penumbra.GameData.Enums;
 using Penumbra.String;
 using Penumbra.String.Classes;
+using Penumbra.Util;
 
 namespace Penumbra.Interop.Loader;
 
@@ -21,8 +24,7 @@ public unsafe partial class ResourceLoader
 
     public delegate IntPtr ResourceHandleDestructor( ResourceHandle* handle );
 
-    [Signature( "48 89 5C 24 ?? 57 48 83 EC ?? 48 8D 05 ?? ?? ?? ?? 48 8B D9 48 89 01 B8",
-        DetourName = nameof( ResourceHandleDestructorDetour ) )]
+    [Signature( Sigs.ResourceHandleDestructor, DetourName = nameof( ResourceHandleDestructorDetour ) )]
     public static Hook< ResourceHandleDestructor >? ResourceHandleDestructorHook;
 
     private IntPtr ResourceHandleDestructorDetour( ResourceHandle* handle )
@@ -36,7 +38,7 @@ public unsafe partial class ResourceLoader
     }
 
     // A static pointer to the SE Resource Manager
-    [Signature( "48 8B 0D ?? ?? ?? ?? E8 ?? ?? ?? ?? 32 C0", ScanType = ScanType.StaticAddress, UseFlags = SignatureUseFlags.Pointer )]
+    [Signature( Sigs.ResourceManager, ScanType = ScanType.StaticAddress)]
     public static ResourceManager** ResourceManager;
 
     // Gather some debugging data about penumbra-loaded objects.
@@ -71,6 +73,8 @@ public unsafe partial class ResourceLoader
     private void AddModifiedDebugInfo( Structs.ResourceHandle* handle, Utf8GamePath originalPath, FullPath? manipulatedPath,
         ResolveData resolverInfo )
     {
+        using var performance = Penumbra.Performance.Measure( PerformanceType.DebugTimes );
+
         if( manipulatedPath == null || manipulatedPath.Value.Crc64 == 0 )
         {
             return;
@@ -149,9 +153,8 @@ public unsafe partial class ResourceLoader
         ref var manager = ref *ResourceManager;
         var     catIdx  = ( uint )cat >> 0x18;
         cat = ( ResourceCategory )( ushort )cat;
-        var category = ( ResourceGraph.CategoryContainer* )manager->ResourceGraph->ContainerArray + ( int )cat;
-        var extMap = FindInMap( ( StdMap< uint, Pointer< StdMap< uint, Pointer< ResourceHandle > > > >* )category->CategoryMaps[ catIdx ],
-            ( uint )ext );
+        ref var category = ref manager->ResourceGraph->ContainerArraySpan[(int) cat];
+        var extMap = FindInMap( category.CategoryMapsSpan[ (int) catIdx ].Value, ( uint )ext );
         if( extMap == null )
         {
             return null;
@@ -173,11 +176,11 @@ public unsafe partial class ResourceLoader
         ref var manager = ref *ResourceManager;
         foreach( var resourceType in Enum.GetValues< ResourceCategory >().SkipLast( 1 ) )
         {
-            var graph = ( ResourceGraph.CategoryContainer* )manager->ResourceGraph->ContainerArray + ( int )resourceType;
+            ref var graph = ref manager->ResourceGraph->ContainerArraySpan[(int) resourceType];
             for( var i = 0; i < 20; ++i )
             {
-                var map = ( StdMap< uint, Pointer< StdMap< uint, Pointer< ResourceHandle > > > >* )graph->CategoryMaps[ i ];
-                if( map != null )
+                var map = graph.CategoryMapsSpan[i];
+                if( map.Value != null )
                 {
                     action( resourceType, map, i );
                 }
@@ -202,9 +205,17 @@ public unsafe partial class ResourceLoader
     // Only used when the Replaced Resources Tab in the Debug tab is open.
     public void UpdateDebugInfo()
     {
+        using var performance = Penumbra.Performance.Measure( PerformanceType.DebugTimes );
         for( var i = 0; i < _debugList.Count; ++i )
         {
-            var data             = _debugList.Values[ i ];
+            var data = _debugList.Values[ i ];
+            // ReSharper disable once ConditionIsAlwaysTrueOrFalseAccordingToNullableAPIContract
+            if( data.OriginalPath.Path == null )
+            {
+                _debugList.RemoveAt( i-- );
+                continue;
+            }
+
             var regularResource  = FindResource( data.Category, data.Extension, ( uint )data.OriginalPath.Path.Crc32 );
             var modifiedResource = FindResource( data.Category, data.Extension, ( uint )data.ManipulatedPath.InternalName.Crc32 );
             if( modifiedResource == null )
@@ -243,14 +254,13 @@ public unsafe partial class ResourceLoader
     private static void LogPath( Utf8GamePath path, bool synchronous )
         => Penumbra.Log.Information( $"[ResourceLoader] Requested {path} {( synchronous ? "synchronously." : "asynchronously." )}" );
 
-    private static void LogResource( Structs.ResourceHandle* handle, Utf8GamePath path, FullPath? manipulatedPath, ResolveData _ )
+    private static void LogResource( Structs.ResourceHandle* handle, Utf8GamePath path, FullPath? manipulatedPath, ResolveData data )
     {
         var pathString = manipulatedPath != null ? $"custom file {manipulatedPath} instead of {path}" : path.ToString();
-        Penumbra.Log.Information( $"[ResourceLoader] Loaded {pathString} to 0x{( ulong )handle:X}. (Refcount {handle->RefCount})" );
+        Penumbra.Log.Information(
+            $"[ResourceLoader] [{handle->FileType}] Loaded {pathString} to 0x{( ulong )handle:X} using collection {data.ModCollection.AnonymizedName} for {data.AssociatedName()} (Refcount {handle->RefCount}) " );
     }
 
-    private static void LogLoadedFile( ByteString path, bool success, bool custom )
-        => Penumbra.Log.Information( success
-            ? $"[ResourceLoader] Loaded {path} from {( custom ? "local files" : "SqPack" )}"
-            : $"[ResourceLoader] Failed to load {path} from {( custom ? "local files" : "SqPack" )}." );
+    private static void LogLoadedFile( Structs.ResourceHandle* resource, ByteString path, bool success, bool custom )
+        => Penumbra.Log.Information( $"[ResourceLoader] Loading {path} from {( custom ? "local files" : "SqPack" )} into 0x{( ulong )resource:X} returned {success}." );
 }
