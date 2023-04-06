@@ -361,6 +361,7 @@ public partial class ConfigWindow
             {
                 if( bannerTree )
                 {
+                    /*
                     var agent = &AgentBannerParty.Instance()->AgentBannerInterface;
                     if( agent->Data == null )
                     {
@@ -385,6 +386,7 @@ public partial class ConfigWindow
                     {
                         ImGui.TextUnformatted( "INACTIVE" );
                     }
+                    */
                 }
             }
         }

@@ -51,11 +51,11 @@ internal class GamePathParser : IGamePathParser
 
     public string VfxToKey(string path)
     {
-        var match = GamePaths.Vfx.Tmb().Match(path);
+        var match = GamePaths.Vfx.Tmb.Match(path);
         if (match.Success)
             return match.Groups["key"].Value.ToLowerInvariant();
 
-        match = GamePaths.Vfx.Pap().Match(path);
+        match = GamePaths.Vfx.Pap.Match(path);
         return match.Success ? match.Groups["key"].Value.ToLowerInvariant() : string.Empty;
     }
 
@@ -136,11 +136,11 @@ internal class GamePathParser : IGamePathParser
         {
             var regexes = new Regex[]
             {
-                GamePaths.Character.Tex.Regex(),
-                GamePaths.Character.Tex.FolderRegex(),
-                GamePaths.Character.Tex.SkinRegex(),
-                GamePaths.Character.Tex.CatchlightRegex(),
-                GamePaths.Character.Tex.DecalRegex(),
+                GamePaths.Character.Tex.Regex,
+                GamePaths.Character.Tex.FolderRegex,
+                GamePaths.Character.Tex.SkinRegex,
+                GamePaths.Character.Tex.CatchlightRegex,
+                GamePaths.Character.Tex.DecalRegex,
             };
             foreach (var regex in regexes)
             {
@@ -154,32 +154,32 @@ internal class GamePathParser : IGamePathParser
 
         var match = (fileType, objectType) switch
         {
-            (FileType.Font, ObjectType.Font)          => GamePaths.Font.Regex().Match(path),
-            (FileType.Imc, ObjectType.Weapon)         => GamePaths.Weapon.Imc.Regex().Match(path),
-            (FileType.Imc, ObjectType.Monster)        => GamePaths.Monster.Imc.Regex().Match(path),
-            (FileType.Imc, ObjectType.DemiHuman)      => GamePaths.DemiHuman.Imc.Regex().Match(path),
-            (FileType.Imc, ObjectType.Equipment)      => GamePaths.Equipment.Imc.Regex().Match(path),
-            (FileType.Imc, ObjectType.Accessory)      => GamePaths.Accessory.Imc.Regex().Match(path),
-            (FileType.Model, ObjectType.Weapon)       => GamePaths.Weapon.Mdl.Regex().Match(path),
-            (FileType.Model, ObjectType.Monster)      => GamePaths.Monster.Mdl.Regex().Match(path),
-            (FileType.Model, ObjectType.DemiHuman)    => GamePaths.DemiHuman.Mdl.Regex().Match(path),
-            (FileType.Model, ObjectType.Equipment)    => GamePaths.Equipment.Mdl.Regex().Match(path),
-            (FileType.Model, ObjectType.Accessory)    => GamePaths.Accessory.Mdl.Regex().Match(path),
-            (FileType.Model, ObjectType.Character)    => GamePaths.Character.Mdl.Regex().Match(path),
-            (FileType.Material, ObjectType.Weapon)    => GamePaths.Weapon.Mtrl.Regex().Match(path),
-            (FileType.Material, ObjectType.Monster)   => GamePaths.Monster.Mtrl.Regex().Match(path),
-            (FileType.Material, ObjectType.DemiHuman) => GamePaths.DemiHuman.Mtrl.Regex().Match(path),
-            (FileType.Material, ObjectType.Equipment) => GamePaths.Equipment.Mtrl.Regex().Match(path),
-            (FileType.Material, ObjectType.Accessory) => GamePaths.Accessory.Mtrl.Regex().Match(path),
-            (FileType.Material, ObjectType.Character) => GamePaths.Character.Mtrl.Regex().Match(path),
-            (FileType.Texture, ObjectType.Weapon)     => GamePaths.Weapon.Tex.Regex().Match(path),
-            (FileType.Texture, ObjectType.Monster)    => GamePaths.Monster.Tex.Regex().Match(path),
-            (FileType.Texture, ObjectType.DemiHuman)  => GamePaths.DemiHuman.Tex.Regex().Match(path),
-            (FileType.Texture, ObjectType.Equipment)  => GamePaths.Equipment.Tex.Regex().Match(path),
-            (FileType.Texture, ObjectType.Accessory)  => GamePaths.Accessory.Tex.Regex().Match(path),
+            (FileType.Font, ObjectType.Font)          => GamePaths.Font.Regex.Match(path),
+            (FileType.Imc, ObjectType.Weapon)         => GamePaths.Weapon.Imc.Regex.Match(path),
+            (FileType.Imc, ObjectType.Monster)        => GamePaths.Monster.Imc.Regex.Match(path),
+            (FileType.Imc, ObjectType.DemiHuman)      => GamePaths.DemiHuman.Imc.Regex.Match(path),
+            (FileType.Imc, ObjectType.Equipment)      => GamePaths.Equipment.Imc.Regex.Match(path),
+            (FileType.Imc, ObjectType.Accessory)      => GamePaths.Accessory.Imc.Regex.Match(path),
+            (FileType.Model, ObjectType.Weapon)       => GamePaths.Weapon.Mdl.Regex.Match(path),
+            (FileType.Model, ObjectType.Monster)      => GamePaths.Monster.Mdl.Regex.Match(path),
+            (FileType.Model, ObjectType.DemiHuman)    => GamePaths.DemiHuman.Mdl.Regex.Match(path),
+            (FileType.Model, ObjectType.Equipment)    => GamePaths.Equipment.Mdl.Regex.Match(path),
+            (FileType.Model, ObjectType.Accessory)    => GamePaths.Accessory.Mdl.Regex.Match(path),
+            (FileType.Model, ObjectType.Character)    => GamePaths.Character.Mdl.Regex.Match(path),
+            (FileType.Material, ObjectType.Weapon)    => GamePaths.Weapon.Mtrl.Regex.Match(path),
+            (FileType.Material, ObjectType.Monster)   => GamePaths.Monster.Mtrl.Regex.Match(path),
+            (FileType.Material, ObjectType.DemiHuman) => GamePaths.DemiHuman.Mtrl.Regex.Match(path),
+            (FileType.Material, ObjectType.Equipment) => GamePaths.Equipment.Mtrl.Regex.Match(path),
+            (FileType.Material, ObjectType.Accessory) => GamePaths.Accessory.Mtrl.Regex.Match(path),
+            (FileType.Material, ObjectType.Character) => GamePaths.Character.Mtrl.Regex.Match(path),
+            (FileType.Texture, ObjectType.Weapon)     => GamePaths.Weapon.Tex.Regex.Match(path),
+            (FileType.Texture, ObjectType.Monster)    => GamePaths.Monster.Tex.Regex.Match(path),
+            (FileType.Texture, ObjectType.DemiHuman)  => GamePaths.DemiHuman.Tex.Regex.Match(path),
+            (FileType.Texture, ObjectType.Equipment)  => GamePaths.Equipment.Tex.Regex.Match(path),
+            (FileType.Texture, ObjectType.Accessory)  => GamePaths.Accessory.Tex.Regex.Match(path),
             (FileType.Texture, ObjectType.Character)  => TestCharacterTextures(path),
-            (FileType.Texture, ObjectType.Icon)       => GamePaths.Icon.Regex().Match(path),
-            (FileType.Texture, ObjectType.Map)        => GamePaths.Map.Regex().Match(path),
+            (FileType.Texture, ObjectType.Icon)       => GamePaths.Icon.Regex.Match(path),
+            (FileType.Texture, ObjectType.Map)        => GamePaths.Map.Regex.Match(path),
             _                                         => Match.Empty,
         };
 

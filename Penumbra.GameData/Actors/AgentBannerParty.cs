@@ -28,7 +28,7 @@ public unsafe struct AgentBannerInterface
             _                   => null,
         };
 }
-
+/*
 [StructLayout(LayoutKind.Explicit)]
 public unsafe struct AgentBannerParty
 {
@@ -43,6 +43,7 @@ public unsafe struct AgentBannerMIP
     public static AgentBannerMIP* Instance() => ( AgentBannerMIP* )Framework.Instance()->GetUiModule()->GetAgentModule()->GetAgentByInternalId( AgentId.BannerMIP );
     [FieldOffset( 0x0 )] public AgentBannerInterface AgentBannerInterface;
 }
+*/
 
 // Client::UI::Agent::AgentBannerInterface::Storage
 // destructed in Client::UI::Agent::AgentBannerInterface::dtor

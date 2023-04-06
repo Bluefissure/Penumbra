@@ -5,7 +5,6 @@ using Dalamud.Hooking;
 using Dalamud.Utility.Signatures;
 using FFXIVClientStructs.FFXIV.Client.System.Resource;
 using FFXIVClientStructs.FFXIV.Client.System.Resource.Handle;
-using FFXIVClientStructs.Interop;
 using FFXIVClientStructs.STD;
 using Penumbra.Collections;
 using Penumbra.GameData;
@@ -151,6 +150,20 @@ public unsafe partial class ResourceLoader
     public static ResourceHandle* FindResource( ResourceCategory cat, ResourceType ext, uint crc32 )
     {
         ref var manager = ref *ResourceManager;
+        var catIdx = ( uint )cat >> 0x18;
+        cat = ( ResourceCategory )( ushort )cat;
+        var category = ( ResourceGraph.CategoryContainer* )manager->ResourceGraph->ContainerArray + ( int )cat;
+        var extMap = FindInMap( ( StdMap<uint, Pointer<StdMap<uint, Pointer<ResourceHandle>>>>* )category->CategoryMaps[catIdx],
+            ( uint )ext );
+        if( extMap == null )
+        {
+            return null;
+        }
+
+        var ret = FindInMap( extMap->Value, crc32 );
+        return ret == null ? null : ret->Value;
+        /*
+        ref var manager = ref *ResourceManager;
         var     catIdx  = ( uint )cat >> 0x18;
         cat = ( ResourceCategory )( ushort )cat;
         ref var category = ref manager->ResourceGraph->ContainerArraySpan[(int) cat];
@@ -162,6 +175,7 @@ public unsafe partial class ResourceLoader
 
         var ret = FindInMap( extMap->Value, crc32 );
         return ret == null ? null : ret->Value;
+        */
     }
 
     public delegate void ExtMapAction( ResourceCategory category, StdMap< uint, Pointer< StdMap< uint, Pointer< ResourceHandle > > > >* graph,
@@ -173,6 +187,20 @@ public unsafe partial class ResourceLoader
     // Iteration functions through the resource manager.
     public static void IterateGraphs( ExtMapAction action )
     {
+        ref var manager = ref *ResourceManager;
+        foreach( var resourceType in Enum.GetValues<ResourceCategory>().SkipLast( 1 ) )
+        {
+            var graph = ( ResourceGraph.CategoryContainer* )manager->ResourceGraph->ContainerArray + ( int )resourceType;
+            for( var i = 0; i < 20; ++i )
+            {
+                var map = ( StdMap<uint, Pointer<StdMap<uint, Pointer<ResourceHandle>>>>* )graph->CategoryMaps[i];
+                if( map != null )
+                {
+                    action( resourceType, map, i );
+                }
+            }
+        }
+        /*
         ref var manager = ref *ResourceManager;
         foreach( var resourceType in Enum.GetValues< ResourceCategory >().SkipLast( 1 ) )
         {
@@ -186,6 +214,7 @@ public unsafe partial class ResourceLoader
                 }
             }
         }
+        */
     }
 
     public static void IterateExtMap( StdMap< uint, Pointer< StdMap< uint, Pointer< ResourceHandle > > > >* map, ResourceMapAction action )

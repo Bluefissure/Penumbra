@@ -108,10 +108,10 @@ public unsafe partial class ResourceLoader : IDisposable
     {
         SignatureHelper.Initialise( this );
         _decRefHook = Hook< ResourceHandleDecRef >.FromAddress(
-            ( IntPtr )FFXIVClientStructs.FFXIV.Client.System.Resource.Handle.ResourceHandle.MemberFunctionPointers.DecRef,
+            ( IntPtr )FFXIVClientStructs.FFXIV.Client.System.Resource.Handle.ResourceHandle.fpDecRef,
             ResourceHandleDecRefDetour );
         _incRefHook = Hook< ResourceHandleDestructor >.FromAddress(
-            ( IntPtr )FFXIVClientStructs.FFXIV.Client.System.Resource.Handle.ResourceHandle.MemberFunctionPointers.IncRef, ResourceHandleIncRefDetour );
+            ( IntPtr )FFXIVClientStructs.FFXIV.Client.System.Resource.Handle.ResourceHandle.fpIncRef, ResourceHandleIncRefDetour );
     }
 
     // Event fired whenever a resource is requested.

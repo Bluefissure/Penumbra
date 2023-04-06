@@ -82,20 +82,15 @@ public partial class DisassembledShader
         Vertex      = 0x56, // 'V'
     }
 
-    [GeneratedRegex(@"\s(\w+)(?:\[\d+\])?;\s*//\s*Offset:\s*0\s*Size:\s*(\d+)$", RegexOptions.Multiline | RegexOptions.NonBacktracking)]
-    private static partial Regex ResourceBindingSizeRegex();
+    private static Regex ResourceBindingSizeRegex = new(@"\s(\w+)(?:\[\d+\])?;\s*//\s*Offset:\s*0\s*Size:\s*(\d+)$", RegexOptions.Multiline);
 
-    [GeneratedRegex(@"c(\d+)(?:\[([^\]]+)\])?(?:\.([wxyz]+))?", RegexOptions.NonBacktracking)]
-    private static partial Regex Sm3ConstantBufferUsageRegex();
+    private static Regex Sm3ConstantBufferUsageRegex = new (@"c(\d+)(?:\[([^\]]+)\])?(?:\.([wxyz]+))?");
 
-    [GeneratedRegex(@"^\s*texld\S*\s+[^,]+,[^,]+,\s*s(\d+)", RegexOptions.NonBacktracking)]
-    private static partial Regex Sm3TextureUsageRegex();
+    private static Regex Sm3TextureUsageRegex = new(@"^\s*texld\S*\s+[^,]+,[^,]+,\s*s(\d+)");
 
-    [GeneratedRegex(@"cb(\d+)\[([^\]]+)\]\.([wxyz]+)", RegexOptions.NonBacktracking)]
-    private static partial Regex Sm5ConstantBufferUsageRegex();
+    private static Regex Sm5ConstantBufferUsageRegex = new (@"cb(\d+)\[([^\]]+)\]\.([wxyz]+)");
 
-    [GeneratedRegex(@"^\s*sample_\S*\s+[^.]+\.([wxyz]+),[^,]+,\s*t(\d+)\.([wxyz]+)", RegexOptions.NonBacktracking)]
-    private static partial Regex Sm5TextureUsageRegex();
+    private static Regex Sm5TextureUsageRegex = new (@"^\s*sample_\S*\s+[^.]+\.([wxyz]+),[^,]+,\s*t(\d+)\.([wxyz]+)");
 
     private static readonly char[] Digits = Enumerable.Range(0, 10).Select(c => (char)('0' + c)).ToArray();
 
@@ -206,7 +201,7 @@ public partial class DisassembledShader
                 continue;
 
             var instructionString = instruction.ToString();
-            foreach (Match cbMatch in Sm3ConstantBufferUsageRegex().Matches(instructionString))
+            foreach (Match cbMatch in Sm3ConstantBufferUsageRegex.Matches(instructionString))
             {
                 var buffer = uint.Parse(cbMatch.Groups[1].Value);
                 if (cbIndices.TryGetValue(buffer, out var i))
@@ -219,7 +214,7 @@ public partial class DisassembledShader
                 }
             }
 
-            var tMatch = Sm3TextureUsageRegex().Match(instructionString);
+            var tMatch = Sm3TextureUsageRegex.Match(instructionString);
             if (tMatch.Success)
             {
                 var texture = uint.Parse(tMatch.Groups[1].Value);
@@ -259,7 +254,7 @@ public partial class DisassembledShader
         if (header.TryGetValue("Buffer Definitions", out var rawBufferDefs))
         {
             bufferDefinitions = string.Join('\n', rawBufferDefs);
-            foreach (Match match in ResourceBindingSizeRegex().Matches(bufferDefinitions))
+            foreach (Match match in ResourceBindingSizeRegex.Matches(bufferDefinitions))
             {
                 var name = match.Groups[1].Value;
                 var bytesSize = uint.Parse(match.Groups[2].Value);
@@ -337,7 +332,7 @@ public partial class DisassembledShader
                 continue;
 
             var instructionString = instruction.ToString();
-            foreach (Match cbMatch in Sm5ConstantBufferUsageRegex().Matches(instructionString))
+            foreach (Match cbMatch in Sm5ConstantBufferUsageRegex.Matches(instructionString))
             {
                 var buffer = uint.Parse(cbMatch.Groups[1].Value);
                 if (cbIndices.TryGetValue(buffer, out var i))
@@ -355,7 +350,7 @@ public partial class DisassembledShader
                 }
             }
 
-            var tMatch = Sm5TextureUsageRegex().Match(instructionString);
+            var tMatch = Sm5TextureUsageRegex.Match(instructionString);
             if (tMatch.Success)
             {
                 var texture = uint.Parse(tMatch.Groups[2].Value);

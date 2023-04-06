@@ -253,7 +253,7 @@ public partial class Mod
                         o.Remove();
                     }
 
-                    var match       = DuplicateNumber().Match( name );
+                    var match       = DuplicateNumber.Match( name );
                     var startNumber = match.Success ? int.Parse( match.Groups[ 0 ].Value ) : 1;
                     name = match.Success ? name[ ..4 ] : name;
                     var oldName = $"{name}, Part {startNumber}";
@@ -296,7 +296,6 @@ public partial class Mod
             }
         }
 
-        [GeneratedRegex( @", Part (\d+)$", RegexOptions.NonBacktracking )]
-        private static partial Regex DuplicateNumber();
+        private static Regex DuplicateNumber = new( @", Part (\d+)$" );
     }
 }

@@ -226,7 +226,10 @@ public sealed partial class ActorManager : IDisposable
 
     public unsafe bool ResolvePartyBannerPlayer(ScreenActor type, out ActorIdentifier id)
     {
+        // There's no party banner for 6.28
         id = ActorIdentifier.Invalid;
+        return false;
+        /*
         var module = Framework.Instance()->GetUiModule()->GetAgentModule();
         if (module == null)
             return false;
@@ -245,6 +248,7 @@ public sealed partial class ActorManager : IDisposable
         var name = new ByteString(character->Name1.StringPtr);
         id = CreatePlayer(name, (ushort)character->WorldId);
         return true;
+        */
     }
 
     private unsafe bool SearchPlayerCustomize(Character* character, int idx, out ActorIdentifier id)
@@ -292,7 +296,7 @@ public sealed partial class ActorManager : IDisposable
     public unsafe bool ResolveMahjongPlayer(ScreenActor type, out ActorIdentifier id)
     {
         id = ActorIdentifier.Invalid;
-        if (_clientState.TerritoryType != 831 && _gameGui.GetAddonByName("EmjIntro") == IntPtr.Zero)
+        if (_clientState.TerritoryType != 831 && _gameGui.GetAddonByName("EmjIntro", 1) == IntPtr.Zero)
             return false;
 
         var obj = (Character*)_objects.GetObjectAddress((int)type);
@@ -316,7 +320,7 @@ public sealed partial class ActorManager : IDisposable
         if (!_clientState.IsPvPExcludingDen)
             return false;
 
-        var addon = (AtkUnitBase*)_gameGui.GetAddonByName("PvPMap");
+        var addon = (AtkUnitBase*)_gameGui.GetAddonByName("PvPMap", 1);
         if (addon == null || addon->IsVisible)
             return false;
 

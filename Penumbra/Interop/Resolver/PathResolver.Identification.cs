@@ -46,7 +46,7 @@ public unsafe partial class PathResolver
             }
 
             // Aesthetician. The relevant actor is yourself, so use player collection when possible.
-            if( Dalamud.GameGui.GetAddonByName( "ScreenLog" ) == IntPtr.Zero )
+            if( Dalamud.GameGui.GetAddonByName( "ScreenLog", 1 ) == IntPtr.Zero )
             {
                 var player = Penumbra.Actors.GetCurrentPlayer();
                 var collection2 = ( player.IsValid ? CollectionByIdentifier( player ) : null )
