@@ -13,6 +13,7 @@ public class ValidityChecker
     public const string Repository          = "https://raw.githubusercontent.com/Bluefissure/Penumbra/cn/repo.json";
     public const string RepositoryLower = "https://raw.githubusercontent.com/bluefissure/penumbra/cn/repo.json";
     public const string MirrorRepositoryLower = "https://dalamud_cn_3rd.otters.cloud/plugins/penumbra";
+    public const string MirrorRepositoryAllLower = "https://dalamud_cn_3rd.otters.cloud/plugins/all";
     public const string TestRepositoryLower = "https://raw.githubusercontent.com/xivdev/penumbra/test/repo.json";
 
     public readonly bool DevPenumbraExists;
@@ -81,6 +82,7 @@ public class ValidityChecker
             null                => false,
             RepositoryLower     => true,
             MirrorRepositoryLower => true,
+            MirrorRepositoryAllLower => true,
             TestRepositoryLower => true,
             _                   => false,
         };
