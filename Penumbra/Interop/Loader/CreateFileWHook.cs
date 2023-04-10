@@ -28,10 +28,10 @@ public unsafe class CreateFileWHook : IDisposable
 
     /// <summary> Some storage to skip repeated allocations. </summary>
     private readonly ThreadLocal< nint > _fileNameStorage = new(SetupStorage, true);
-
+    /*
     public CreateFileWHook()
         => _createFileWHook = Hook< CreateFileWDelegate >.FromImport( null, "KERNEL32.dll", "CreateFileW", 0, CreateFileWDetour );
-
+    */
     /// <remarks> Long paths in windows need to start with "\\?\", so we keep this static in the pointers. </remarks>
     private static nint SetupStorage()
     {
@@ -163,16 +163,16 @@ public unsafe class CreateFileWHook : IDisposable
 
     // ***** Old method *****
 
-    //[DllImport( "kernel32.dll" )]
-    //private static extern nint LoadLibrary( string dllName );
-    //
-    //[DllImport( "kernel32.dll" )]
-    //private static extern nint GetProcAddress( nint hModule, string procName );
-    //
-    //public CreateFileWHookOld()
-    //{
-    //    var userApi           = LoadLibrary( "kernel32.dll" );
-    //    var createFileAddress = GetProcAddress( userApi, "CreateFileW" );
-    //    _createFileWHook = Hook<CreateFileWDelegate>.FromAddress( createFileAddress, CreateFileWDetour );
-    //}
+    [DllImport( "kernel32.dll" )]
+    private static extern nint LoadLibrary( string dllName );
+    
+    [DllImport( "kernel32.dll" )]
+    private static extern nint GetProcAddress( nint hModule, string procName );
+    
+    public CreateFileWHook()
+    {
+        var userApi           = LoadLibrary( "kernel32.dll" );
+        var createFileAddress = GetProcAddress( userApi, "CreateFileW" );
+        _createFileWHook = Hook<CreateFileWDelegate>.FromAddress( createFileAddress, CreateFileWDetour );
+    }
 }
