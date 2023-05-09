@@ -16,6 +16,7 @@ public class ValidityChecker
     public const string FastRepositoryLower = "https://raw.fastgit.org/bluefissure/penumbra/cn/repo.json";
     public const string GhProxyRepositoryLower = "https://ghproxy.com/https://raw.githubusercontent.com/bluefissure/penumbra/cn/repo.json";
     public const string CnRepositoryLower = "https://dalamud_cn_3rd.otters.cloud/plugins/all";
+    public const string CnRepositoryLowerPen = "https://dalamud_cn_3rd.otters.cloud/plugins/penumbra";
 
     public readonly bool DevPenumbraExists;
     public readonly bool IsNotInstalledPenumbra;
@@ -93,6 +94,7 @@ public class ValidityChecker
             FastRepositoryLower => true,
             GhProxyRepositoryLower => true,
             CnRepositoryLower => true,
+            CnRepositoryLowerPen => true,
             _                   => false,
         };
 #else
