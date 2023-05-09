@@ -85,6 +85,8 @@ public partial class MdlFile : IWritable
     // Raw, unparsed data.
     public byte[] RemainingData;
 
+    public bool Valid { get; }
+
     public MdlFile(byte[] data)
     {
         using var stream = new MemoryStream(data);
@@ -179,7 +181,11 @@ public partial class MdlFile : IWritable
         for (var i = 0; i < modelHeader.BoneCount; i++)
             BoneBoundingBoxes[i] = MdlStructs.BoundingBoxStruct.Read(r);
 
+        var runtimePadding = header.RuntimeSize + FileHeaderSize + header.StackSize - r.BaseStream.Position;
+        if (runtimePadding > 0)
+            r.ReadBytes((int)runtimePadding);
         RemainingData = r.ReadBytes((int)(r.BaseStream.Length - r.BaseStream.Position));
+        Valid         = true;
     }
 
     private MdlStructs.ModelFileHeader LoadModelFileHeader(LuminaBinaryReader r)

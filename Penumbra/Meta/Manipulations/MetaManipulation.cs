@@ -9,7 +9,7 @@ namespace Penumbra.Meta.Manipulations;
 
 public interface IMetaManipulation
 {
-    public CharacterUtility.Index FileIndex();
+    public MetaIndex FileIndex();
 }
 
 public interface IMetaManipulation< T >
@@ -100,7 +100,7 @@ public readonly struct MetaManipulation : IEquatable< MetaManipulation >, ICompa
                     return;
                 case ImcManipulation m:
                     Imc              = m;
-                    ManipulationType = Type.Imc;
+                    ManipulationType = m.Valid ? Type.Imc : Type.Unknown;
                     return;
             }
         }
@@ -194,6 +194,25 @@ public readonly struct MetaManipulation : IEquatable< MetaManipulation >, ICompa
             Type.Est  => Est.Equals( other.Est ),
             Type.Rsp  => Rsp.Equals( other.Rsp ),
             Type.Imc  => Imc.Equals( other.Imc ),
+            _         => false,
+        };
+    }
+
+    public MetaManipulation WithEntryOf( MetaManipulation other )
+    {
+        if( ManipulationType != other.ManipulationType )
+        {
+            return this;
+        }
+
+        return ManipulationType switch
+        {
+            Type.Eqp  => Eqp.Copy( other.Eqp.Entry ),
+            Type.Gmp  => Gmp.Copy( other.Gmp.Entry ),
+            Type.Eqdp => Eqdp.Copy( other.Eqdp ),
+            Type.Est  => Est.Copy( other.Est.Entry ),
+            Type.Rsp  => Rsp.Copy( other.Rsp.Entry ),
+            Type.Imc  => Imc.Copy( other.Imc.Entry ),
             _         => throw new ArgumentOutOfRangeException(),
         };
     }
@@ -210,7 +229,7 @@ public readonly struct MetaManipulation : IEquatable< MetaManipulation >, ICompa
             Type.Est  => Est.GetHashCode(),
             Type.Rsp  => Rsp.GetHashCode(),
             Type.Imc  => Imc.GetHashCode(),
-            _         => throw new ArgumentOutOfRangeException(),
+            _         => 0,
         };
 
     public unsafe int CompareTo( MetaManipulation other )
@@ -230,15 +249,15 @@ public readonly struct MetaManipulation : IEquatable< MetaManipulation >, ICompa
             Type.Est  => Est.ToString(),
             Type.Rsp  => Rsp.ToString(),
             Type.Imc  => Imc.ToString(),
-            _         => throw new ArgumentOutOfRangeException(),
+            _         => "Invalid",
         };
 
     public string EntryToString()
         => ManipulationType switch
         {
             Type.Imc  => $"{Imc.Entry.DecalId}-{Imc.Entry.MaterialId}-{Imc.Entry.VfxId}-{Imc.Entry.SoundId}-{Imc.Entry.MaterialAnimationId}-{Imc.Entry.AttributeMask}",
-            Type.Eqdp => $"{(ushort) Eqdp.Entry:X}",
-            Type.Eqp  => $"{(ulong)Eqp.Entry:X}",
+            Type.Eqdp => $"{( ushort )Eqdp.Entry:X}",
+            Type.Eqp  => $"{( ulong )Eqp.Entry:X}",
             Type.Est  => $"{Est.Entry}",
             Type.Gmp  => $"{Gmp.Entry.Value}",
             Type.Rsp  => $"{Rsp.Entry}",

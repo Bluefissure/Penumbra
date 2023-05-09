@@ -221,6 +221,16 @@ public static class RaceEnumExtensions
         };
     }
 
+    public static string ToShortName(this SubRace subRace)
+    {
+        return subRace switch
+        {
+            SubRace.SeekerOfTheSun  => "Sunseeker",
+            SubRace.KeeperOfTheMoon => "Moonkeeper",
+            _                       => subRace.ToName(),
+        };
+    }
+
     public static bool FitsRace(this SubRace subRace, Race race)
         => subRace.ToRace() == race;
 
@@ -328,7 +338,7 @@ public static class RaceEnumExtensions
             VieraFemaleNpc      => "1804",
             UnknownMaleNpc      => "9104",
             UnknownFemaleNpc    => "9204",
-            _                   => throw new InvalidEnumArgumentException(),
+            _                   => string.Empty,
         };
     }
 
@@ -427,7 +437,7 @@ public static partial class Names
             "1804" => VieraFemaleNpc,
             "9104" => UnknownMaleNpc,
             "9204" => UnknownFemaleNpc,
-            _      => throw new KeyNotFoundException(),
+            _      => Unknown,
         };
     }
 

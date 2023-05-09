@@ -15,7 +15,7 @@ jobs:
       - name: Setup .NET
         uses: actions/setup-dotnet@v1
         with:
-          dotnet-version: '7.0.100-preview.7.22377.5'
+          dotnet-version: '7.x.x'
       - name: Restore dependencies
         run: dotnet restore
       - name: Download Dalamud
@@ -77,9 +77,8 @@ jobs:
           git config --global user.name "Actions User"
           git config --global user.email "actions@github.com"
 
-          git fetch origin master
           git fetch origin test
-          git branch -f test origin/master
+          git branch -f test  ${{ github.sha }}
           git checkout test
           git add repo.json
           git commit -m "[CI] Updating repo.json for ${{ github.ref }}" || true

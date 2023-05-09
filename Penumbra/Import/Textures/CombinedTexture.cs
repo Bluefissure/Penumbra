@@ -1,11 +1,14 @@
 using System;
 using System.IO;
 using System.Numerics;
+using Dalamud.Interface;
 using Lumina.Data.Files;
 using OtterTex;
+using Penumbra.Services;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.Formats.Png;
 using SixLabors.ImageSharp.PixelFormats;
+using DalamudUtil = Dalamud.Utility.Util;
 using Image = SixLabors.ImageSharp.Image;
 
 namespace Penumbra.Import.Textures;
@@ -41,13 +44,13 @@ public partial class CombinedTexture : IDisposable
 
     public Exception? SaveException { get; private set; } = null;
 
-    public void Draw( Vector2 size )
+    public void Draw( UiBuilder builder, Vector2 size )
     {
         if( _mode == Mode.Custom && !_centerStorage.IsLoaded )
         {
             var (width, height) = CombineImage();
             _centerStorage.TextureWrap =
-                Dalamud.PluginInterface.UiBuilder.LoadImageRaw( _centerStorage.RGBAPixels, width, height, 4 );
+                builder.LoadImageRaw( _centerStorage.RGBAPixels, width, height, 4 );
         }
 
         _current?.Draw( size );
@@ -130,9 +133,21 @@ public partial class CombinedTexture : IDisposable
     }
 
     private static ScratchImage AddMipMaps( ScratchImage input, bool mipMaps )
-        => mipMaps
-            ? input.GenerateMipMaps( Math.Min( 13, 1 + BitOperations.Log2( ( uint )Math.Max( input.Meta.Width, input.Meta.Height ) ) ), FilterFlags.SeparateAlpha )
-            : input;
+    {
+        if( !mipMaps )
+        {
+            return input;
+        }
+
+        var numMips = Math.Min( 13, 1 + BitOperations.Log2( ( uint )Math.Max( input.Meta.Width, input.Meta.Height ) ) );
+        var ec      = input.GenerateMipMaps( out var ret, numMips, ( DalamudUtil.IsLinux() ? FilterFlags.ForceNonWIC : 0 ) | FilterFlags.SeparateAlpha );
+        if (ec != ErrorCode.Ok)
+        {
+            throw new Exception( $"Could not create the requested {numMips} mip maps, maybe retry with the top-right checkbox unchecked:\n{ec}" );
+        }
+
+        return ret;
+    }
 
     private static ScratchImage CreateUncompressed( ScratchImage input, bool mipMaps )
     {

@@ -1,7 +1,5 @@
 using System;
-using System.Collections.Generic;
 using System.IO;
-using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
 using Dalamud.Logging;
@@ -10,8 +8,9 @@ using Penumbra.GameData.Structs;
 
 namespace Penumbra.GameData.Data;
 
-internal class GamePathParser : IGamePathParser
+public class GamePathParser : IGamePathParser
 {
+    /// <summary> Obtain basic information about a file path. </summary>
     public GameObjectInfo GetFileInfo(string path)
     {
         path = path.ToLowerInvariant().Replace('\\', '/');
@@ -51,91 +50,19 @@ internal class GamePathParser : IGamePathParser
         };
     }
 
+    /// <summary> Get the key of a VFX symbol. </summary>
+    /// <returns>The lower-case key or an empty string if no match is found.</returns>
     public string VfxToKey(string path)
     {
-        var match = _vfxRegexTmb.Match(path);
+        var match = GamePaths.Vfx.Tmb().Match(path);
         if (match.Success)
             return match.Groups["key"].Value.ToLowerInvariant();
 
-        match = _vfxRegexPap.Match(path);
+        match = GamePaths.Vfx.Pap().Match(path);
         return match.Success ? match.Groups["key"].Value.ToLowerInvariant() : string.Empty;
     }
 
-    private const string CharacterFolder = "chara";
-    private const string EquipmentFolder = "equipment";
-    private const string PlayerFolder    = "human";
-    private const string WeaponFolder    = "weapon";
-    private const string AccessoryFolder = "accessory";
-    private const string DemiHumanFolder = "demihuman";
-    private const string MonsterFolder   = "monster";
-    private const string CommonFolder    = "common";
-    private const string UiFolder        = "ui";
-    private const string IconFolder      = "icon";
-    private const string LoadingFolder   = "loadingimage";
-    private const string MapFolder       = "map";
-    private const string InterfaceFolder = "uld";
-    private const string FontFolder      = "font";
-    private const string HousingFolder   = "hou";
-    private const string VfxFolder       = "vfx";
-    private const string WorldFolder1    = "bgcommon";
-    private const string WorldFolder2    = "bg";
-
-    // @formatter:off
-    // language=regex
-    private readonly IReadOnlyDictionary<FileType, IReadOnlyDictionary<ObjectType, IReadOnlyList<Regex>>> _regexes = new Dictionary<FileType, IReadOnlyDictionary<ObjectType, IReadOnlyList<Regex>>>()
-    {
-        [FileType.Font] = new Dictionary<ObjectType, IReadOnlyList<Regex>>
-        {
-            [ObjectType.Font] = CreateRegexes(@"common/font/(?'fontname'.*)_(?'id'\d\d)(_lobby)?\.fdt"),
-        },
-        [FileType.Texture] = new Dictionary<ObjectType, IReadOnlyList<Regex>>
-        {
-            [ObjectType.Icon] = CreateRegexes(@"ui/icon/(?'group'\d*)(/(?'lang'[a-z]{2}))?(/(?'hq'hq))?/(?'id'\d*)(?'hr'_hr1)?\.tex"),
-            [ObjectType.Map] = CreateRegexes(@"ui/map/(?'id'[a-z0-9]{4})/(?'variant'\d{2})/\k'id'\k'variant'(?'suffix'[a-z])?(_[a-z])?\.tex"),
-            [ObjectType.Weapon] = CreateRegexes(@"chara/weapon/w(?'id'\d{4})/obj/body/b(?'weapon'\d{4})/texture/v(?'variant'\d{2})_w\k'id'b\k'weapon'(_[a-z])?_[a-z]\.tex"),
-            [ObjectType.Monster] = CreateRegexes(@"chara/monster/m(?'monster'\d{4})/obj/body/b(?'id'\d{4})/texture/v(?'variant'\d{2})_m\k'monster'b\k'id'(_[a-z])?_[a-z]\.tex"),
-            [ObjectType.Equipment] = CreateRegexes(@"chara/equipment/e(?'id'\d{4})/texture/v(?'variant'\d{2})_c(?'race'\d{4})e\k'id'_(?'slot'[a-z]{3})(_[a-z])?_[a-z]\.tex"),
-            [ObjectType.DemiHuman] = CreateRegexes(@"chara/demihuman/d(?'id'\d{4})/obj/equipment/e(?'equip'\d{4})/texture/v(?'variant'\d{2})_d\k'id'e\k'equip'_(?'slot'[a-z]{3})(_[a-z])?_[a-z]\.tex"),
-            [ObjectType.Accessory] = CreateRegexes(@"chara/accessory/a(?'id'\d{4})/texture/v(?'variant'\d{2})_c(?'race'\d{4})a\k'id'_(?'slot'[a-z]{3})_[a-z]\.tex"),
-            [ObjectType.Character] = CreateRegexes( @"chara/human/c(?'race'\d{4})/obj/(?'type'[a-z]+)/(?'typeabr'[a-z])(?'id'\d{4})/texture/(?'minus'(--)?)(v(?'variant'\d{2})_)?c\k'race'\k'typeabr'\k'id'(_(?'slot'[a-z]{3}))?(_[a-z])?_[a-z]\.tex"
-                                                  , @"chara/human/c(?'race'\d{4})/obj/(?'type'[a-z]+)/(?'typeabr'[a-z])(?'id'\d{4})/texture"
-                                                  , @"chara/common/texture/skin(?'skin'.*)\.tex"
-                                                  , @"chara/common/texture/(?'catchlight'catchlight)(.*)\.tex"
-                                                  , @"chara/common/texture/decal_(?'location'[a-z]+)/[-_]?decal_(?'id'\d+).tex"),
-        },
-        [FileType.Model] = new Dictionary<ObjectType, IReadOnlyList<Regex>>
-        {
-            [ObjectType.Weapon] = CreateRegexes(@"chara/weapon/w(?'id'\d{4})/obj/body/b(?'weapon'\d{4})/model/w\k'id'b\k'weapon'\.mdl"),
-            [ObjectType.Monster] = CreateRegexes(@"chara/monster/m(?'monster'\d{4})/obj/body/b(?'id'\d{4})/model/m\k'monster'b\k'id'\.mdl"),
-            [ObjectType.Equipment] = CreateRegexes(@"chara/equipment/e(?'id'\d{4})/model/c(?'race'\d{4})e\k'id'_(?'slot'[a-z]{3})\.mdl"),
-            [ObjectType.DemiHuman] = CreateRegexes(@"chara/demihuman/d(?'id'\d{4})/obj/equipment/e(?'equip'\d{4})/model/d\k'id'e\k'equip'_(?'slot'[a-z]{3})\.mdl"),
-            [ObjectType.Accessory] = CreateRegexes(@"chara/accessory/a(?'id'\d{4})/model/c(?'race'\d{4})a\k'id'_(?'slot'[a-z]{3})\.mdl"),
-            [ObjectType.Character] = CreateRegexes(@"chara/human/c(?'race'\d{4})/obj/(?'type'[a-z]+)/(?'typeabr'[a-z])(?'id'\d{4})/model/c\k'race'\k'typeabr'\k'id'_(?'slot'[a-z]{3})\.mdl"),
-        },
-        [FileType.Material] = new Dictionary<ObjectType, IReadOnlyList<Regex>>
-        {
-            [ObjectType.Weapon] = CreateRegexes(@"chara/weapon/w(?'id'\d{4})/obj/body/b(?'weapon'\d{4})/material/v(?'variant'\d{4})/mt_w\k'id'b\k'weapon'_[a-z]+\.mtrl"),
-            [ObjectType.Monster] = CreateRegexes(@"chara/monster/m(?'monster'\d{4})/obj/body/b(?'id'\d{4})/material/v(?'variant'\d{4})/mt_m\k'monster'b\k'id'_[a-z]+\.mtrl"),
-            [ObjectType.Equipment] = CreateRegexes(@"chara/equipment/e(?'id'\d{4})/material/v(?'variant'\d{4})/mt_c(?'race'\d{4})e\k'id'_(?'slot'[a-z]{3})_[a-z]+\.mtrl"),
-            [ObjectType.DemiHuman] = CreateRegexes(@"chara/demihuman/d(?'id'\d{4})/obj/equipment/e(?'equip'\d{4})/material/v(?'variant'\d{4})/mt_d\k'id'e\k'equip'_(?'slot'[a-z]{3})_[a-z]+\.mtrl"),
-            [ObjectType.Accessory] = CreateRegexes(@"chara/accessory/a(?'id'\d{4})/material/v(?'variant'\d{4})/mt_c(?'race'\d{4})a\k'id'_(?'slot'[a-z]{3})_[a-z]+\.mtrl"),
-            [ObjectType.Character] = CreateRegexes(@"chara/human/c(?'race'\d{4})/obj/(?'type'[a-z]+)/(?'typeabr'[a-z])(?'id'\d{4})/material(/v(?'variant'\d{4}))?/mt_c\k'race'\k'typeabr'\k'id'(_(?'slot'[a-z]{3}))?_[a-z]+\.mtrl"),
-        },
-        [FileType.Imc] = new Dictionary<ObjectType, IReadOnlyList<Regex>>
-        {
-            [ObjectType.Weapon] = CreateRegexes(@"chara/weapon/w(?'id'\d{4})/obj/body/b(?'weapon'\d{4})/b\k'weapon'\.imc"),
-            [ObjectType.Monster] = CreateRegexes(@"chara/monster/m(?'monster'\d{4})/obj/body/b(?'id'\d{4})/b\k'id'\.imc"),
-            [ObjectType.Equipment] = CreateRegexes(@"chara/equipment/e(?'id'\d{4})/e\k'id'\.imc"),
-            [ObjectType.DemiHuman] = CreateRegexes(@"chara/demihuman/d(?'id'\d{4})/obj/equipment/e(?'equip'\d{4})/e\k'equip'\.imc"),
-            [ObjectType.Accessory] = CreateRegexes(@"chara/accessory/a(?'id'\d{4})/a\k'id'\.imc"),
-        },
-    };
-
-    private static IReadOnlyList<Regex> CreateRegexes(params string[] regexes)
-        => regexes.Select(s => new Regex(s, RegexOptions.Compiled)).ToArray();
-    // @formatter:on
-
-
+    /// <summary> Obtain the ObjectType from a given path.</summary>
     public ObjectType PathToObjectType(string path)
     {
         if (path.Length == 0)
@@ -183,6 +110,25 @@ internal class GamePathParser : IGamePathParser
         };
     }
 
+    private const string CharacterFolder = "chara";
+    private const string EquipmentFolder = "equipment";
+    private const string PlayerFolder    = "human";
+    private const string WeaponFolder    = "weapon";
+    private const string AccessoryFolder = "accessory";
+    private const string DemiHumanFolder = "demihuman";
+    private const string MonsterFolder   = "monster";
+    private const string CommonFolder    = "common";
+    private const string UiFolder        = "ui";
+    private const string IconFolder      = "icon";
+    private const string LoadingFolder   = "loadingimage";
+    private const string MapFolder       = "map";
+    private const string InterfaceFolder = "uld";
+    private const string FontFolder      = "font";
+    private const string HousingFolder   = "hou";
+    private const string VfxFolder       = "vfx";
+    private const string WorldFolder1    = "bgcommon";
+    private const string WorldFolder2    = "bg";
+
     private (FileType, ObjectType, Match?) ParseGamePath(string path)
     {
         if (!Names.ExtensionToFileType.TryGetValue(Path.GetExtension(path), out var fileType))
@@ -190,20 +136,58 @@ internal class GamePathParser : IGamePathParser
 
         var objectType = PathToObjectType(path);
 
-        if (!_regexes.TryGetValue(fileType, out var objectDict))
-            return (fileType, objectType, null);
-
-        if (!objectDict.TryGetValue(objectType, out var regexes))
-            return (fileType, objectType, null);
-
-        foreach (var regex in regexes)
+        static Match TestCharacterTextures(string path)
         {
-            var match = regex.Match(path);
-            if (match.Success)
-                return (fileType, objectType, match);
+            var regexes = new Regex[]
+            {
+                GamePaths.Character.Tex.Regex(),
+                GamePaths.Character.Tex.FolderRegex(),
+                GamePaths.Character.Tex.SkinRegex(),
+                GamePaths.Character.Tex.CatchlightRegex(),
+                GamePaths.Character.Tex.DecalRegex(),
+            };
+            foreach (var regex in regexes)
+            {
+                var match = regex.Match(path);
+                if (match.Success)
+                    return match;
+            }
+
+            return Match.Empty;
         }
 
-        return (fileType, objectType, null);
+        var match = (fileType, objectType) switch
+        {
+            (FileType.Font, ObjectType.Font)          => GamePaths.Font.Regex().Match(path),
+            (FileType.Imc, ObjectType.Weapon)         => GamePaths.Weapon.Imc.Regex().Match(path),
+            (FileType.Imc, ObjectType.Monster)        => GamePaths.Monster.Imc.Regex().Match(path),
+            (FileType.Imc, ObjectType.DemiHuman)      => GamePaths.DemiHuman.Imc.Regex().Match(path),
+            (FileType.Imc, ObjectType.Equipment)      => GamePaths.Equipment.Imc.Regex().Match(path),
+            (FileType.Imc, ObjectType.Accessory)      => GamePaths.Accessory.Imc.Regex().Match(path),
+            (FileType.Model, ObjectType.Weapon)       => GamePaths.Weapon.Mdl.Regex().Match(path),
+            (FileType.Model, ObjectType.Monster)      => GamePaths.Monster.Mdl.Regex().Match(path),
+            (FileType.Model, ObjectType.DemiHuman)    => GamePaths.DemiHuman.Mdl.Regex().Match(path),
+            (FileType.Model, ObjectType.Equipment)    => GamePaths.Equipment.Mdl.Regex().Match(path),
+            (FileType.Model, ObjectType.Accessory)    => GamePaths.Accessory.Mdl.Regex().Match(path),
+            (FileType.Model, ObjectType.Character)    => GamePaths.Character.Mdl.Regex().Match(path),
+            (FileType.Material, ObjectType.Weapon)    => GamePaths.Weapon.Mtrl.Regex().Match(path),
+            (FileType.Material, ObjectType.Monster)   => GamePaths.Monster.Mtrl.Regex().Match(path),
+            (FileType.Material, ObjectType.DemiHuman) => GamePaths.DemiHuman.Mtrl.Regex().Match(path),
+            (FileType.Material, ObjectType.Equipment) => GamePaths.Equipment.Mtrl.Regex().Match(path),
+            (FileType.Material, ObjectType.Accessory) => GamePaths.Accessory.Mtrl.Regex().Match(path),
+            (FileType.Material, ObjectType.Character) => GamePaths.Character.Mtrl.Regex().Match(path),
+            (FileType.Texture, ObjectType.Weapon)     => GamePaths.Weapon.Tex.Regex().Match(path),
+            (FileType.Texture, ObjectType.Monster)    => GamePaths.Monster.Tex.Regex().Match(path),
+            (FileType.Texture, ObjectType.DemiHuman)  => GamePaths.DemiHuman.Tex.Regex().Match(path),
+            (FileType.Texture, ObjectType.Equipment)  => GamePaths.Equipment.Tex.Regex().Match(path),
+            (FileType.Texture, ObjectType.Accessory)  => GamePaths.Accessory.Tex.Regex().Match(path),
+            (FileType.Texture, ObjectType.Character)  => TestCharacterTextures(path),
+            (FileType.Texture, ObjectType.Icon)       => GamePaths.Icon.Regex().Match(path),
+            (FileType.Texture, ObjectType.Map)        => GamePaths.Map.Regex().Match(path),
+            _                                         => Match.Empty,
+        };
+
+        return (fileType, objectType, match.Success ? match : null);
     }
 
     private static GameObjectInfo HandleEquipment(FileType fileType, GroupCollection groups)
@@ -319,10 +303,4 @@ internal class GamePathParser : IGamePathParser
 
         return GameObjectInfo.Map(fileType, map[0], map[1], map[2], map[3], variant);
     }
-
-
-    private readonly Regex _vfxRegexTmb = new(@"chara[\/]action[\/](?'key'[^\s]+?)\.tmb", RegexOptions.Compiled | RegexOptions.IgnoreCase);
-
-    private readonly Regex _vfxRegexPap = new(@"chara[\/]human[\/]c0101[\/]animation[\/]a0001[\/][^\s]+?[\/](?'key'[^\s]+?)\.pap",
-        RegexOptions.Compiled | RegexOptions.IgnoreCase);
 }

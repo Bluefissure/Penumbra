@@ -1,159 +1,169 @@
 using System;
 using System.Numerics;
-using Dalamud.Interface;
 using Dalamud.Interface.Windowing;
+using Dalamud.Plugin;
 using ImGuiNET;
 using OtterGui;
 using OtterGui.Raii;
+using Penumbra.Api.Enums;
+using Penumbra.Mods;
+using Penumbra.Services;
 using Penumbra.UI.Classes;
+using Penumbra.UI.Tabs;
+using Penumbra.Util;
 
 namespace Penumbra.UI;
 
-public sealed partial class ConfigWindow : Window, IDisposable
+public sealed class ConfigWindow : Window
 {
-    private readonly Penumbra              _penumbra;
-    private readonly SettingsTab           _settingsTab;
-    private readonly ModFileSystemSelector _selector;
-    private readonly ModPanel              _modPanel;
-    private readonly CollectionsTab        _collectionsTab;
-    private readonly EffectiveTab          _effectiveTab;
-    private readonly DebugTab              _debugTab;
-    private readonly ResourceTab           _resourceTab;
-    public readonly  ModEditWindow         ModEditPopup = new();
+    private readonly DalamudPluginInterface _pluginInterface;
+    private readonly Configuration          _config;
+    private readonly PerformanceTracker     _tracker;
+    private readonly ValidityChecker        _validityChecker;
+    private          Penumbra?              _penumbra;
+    private          ConfigTabBar           _configTabs = null!;
+    private          string?                _lastException;
 
-    public ConfigWindow( Penumbra penumbra )
-        : base( GetLabel() )
+    public void SelectTab(TabType tab)
+        => _configTabs.SelectTab = tab;
+
+
+    public void SelectMod(Mod mod)
+        => _configTabs.Mods.SelectMod = mod;
+
+
+    public ConfigWindow(PerformanceTracker tracker, DalamudPluginInterface pi, Configuration config, ValidityChecker checker,
+        TutorialService tutorial)
+        : base(GetLabel(checker))
     {
-        _penumbra                  =  penumbra;
-        _settingsTab               =  new SettingsTab( this );
-        _selector                  =  new ModFileSystemSelector( _penumbra.ModFileSystem );
-        _modPanel                  =  new ModPanel( this );
-        _selector.SelectionChanged += _modPanel.OnSelectionChange;
-        _collectionsTab            =  new CollectionsTab( this );
-        _effectiveTab              =  new EffectiveTab();
-        _debugTab                  =  new DebugTab( this );
-        _resourceTab               =  new ResourceTab( this );
-        if( Penumbra.Config.FixMainWindow )
-        {
-            Flags |= ImGuiWindowFlags.NoResize | ImGuiWindowFlags.NoMove;
-        }
+        _pluginInterface = pi;
+        _config          = config;
+        _tracker         = tracker;
+        _validityChecker = checker;
 
-        Dalamud.PluginInterface.UiBuilder.DisableGposeUiHide    = !Penumbra.Config.HideUiInGPose;
-        Dalamud.PluginInterface.UiBuilder.DisableCutsceneUiHide = !Penumbra.Config.HideUiInCutscenes;
-        Dalamud.PluginInterface.UiBuilder.DisableUserUiHide     = !Penumbra.Config.HideUiWhenUiHidden;
-        RespectCloseHotkey                                      = true;
+        RespectCloseHotkey = true;
+        tutorial.UpdateTutorialStep();
+        IsOpen = _config.DebugMode;
+    }
+
+    public void Setup(Penumbra penumbra, ConfigTabBar configTabs)
+    {
+        _penumbra   = penumbra;
+        _configTabs = configTabs;
+    }
+
+    public override bool DrawConditions()
+        => _penumbra != null;
+
+    public override void PreDraw()
+    {
+        if (_config.FixMainWindow)
+            Flags |= ImGuiWindowFlags.NoResize | ImGuiWindowFlags.NoMove;
+        else
+            Flags &= ~(ImGuiWindowFlags.NoResize | ImGuiWindowFlags.NoMove);
         SizeConstraints = new WindowSizeConstraints()
         {
-            MinimumSize = new Vector2( 800, 600 ),
-            MaximumSize = new Vector2( 4096, 2160 ),
+            MinimumSize = _config.MinimumSize,
+            MaximumSize = new Vector2(4096, 2160),
         };
-        UpdateTutorialStep();
     }
 
     public override void Draw()
     {
+        using var timer = _tracker.Measure(PerformanceType.UiMainWindow);
+        UiHelpers.SetupCommonSizes();
         try
         {
-            if( Penumbra.ImcExceptions.Count > 0 )
+            if (_validityChecker.ImcExceptions.Count > 0)
             {
-                DrawProblemWindow( $"There were {Penumbra.ImcExceptions.Count} errors while trying to load IMC files from the game data.\n"
+                DrawProblemWindow(
+                    $"There were {_validityChecker.ImcExceptions.Count} errors while trying to load IMC files from the game data.\n"
                   + "This usually means that your game installation was corrupted by updating the game while having TexTools mods still active.\n"
                   + "It is recommended to not use TexTools and Penumbra (or other Lumina-based tools) at the same time.\n\n"
-                  + "Please use the Launcher's Repair Game Files function to repair your client installation.", true );
+                  + "Please use the Launcher's Repair Game Files function to repair your client installation.");
+                DrawImcExceptions();
             }
-            else if( !Penumbra.IsValidSourceRepo )
+            else if (!_validityChecker.IsValidSourceRepo)
             {
                 DrawProblemWindow(
-                    $"You are loading a release version of Penumbra from the repository \"{Dalamud.PluginInterface.SourceRepository}\" instead of the official repository.\n"
-                  + $"Please use the official repository at {Penumbra.Repository}.\n\n"
-                  + "If you are developing for Penumbra and see this, you should compile your version in debug mode to avoid it.", false );
+                    $"You are loading a release version of Penumbra from the repository \"{_pluginInterface.SourceRepository}\" instead of the official repository.\n"
+                  + $"Please use the official repository at {ValidityChecker.Repository}.\n\n"
+                  + "If you are developing for Penumbra and see this, you should compile your version in debug mode to avoid it.");
             }
-            else if( Penumbra.IsNotInstalledPenumbra )
+            else if (_validityChecker.IsNotInstalledPenumbra)
             {
                 DrawProblemWindow(
-                    $"You are loading a release version of Penumbra from \"{Dalamud.PluginInterface.AssemblyLocation.Directory?.FullName ?? "Unknown"}\" instead of the installedPlugins directory.\n\n"
+                    $"You are loading a release version of Penumbra from \"{_pluginInterface.AssemblyLocation.Directory?.FullName ?? "Unknown"}\" instead of the installedPlugins directory.\n\n"
                   + "You should not install Penumbra manually, but rather add the plugin repository under settings and then install it via the plugin installer.\n\n"
                   + "If you do not know how to do this, please take a look at the readme in Penumbras github repository or join us in discord.\n"
-                  + "If you are developing for Penumbra and see this, you should compile your version in debug mode to avoid it.", false );
+                  + "If you are developing for Penumbra and see this, you should compile your version in debug mode to avoid it.");
             }
-            else if( Penumbra.DevPenumbraExists )
+            else if (_validityChecker.DevPenumbraExists)
             {
                 DrawProblemWindow(
-                    $"You are loading a installed version of Penumbra from \"{Dalamud.PluginInterface.AssemblyLocation.Directory?.FullName ?? "Unknown"}\", "
+                    $"You are loading a installed version of Penumbra from \"{_pluginInterface.AssemblyLocation.Directory?.FullName ?? "Unknown"}\", "
                   + "but also still have some remnants of a custom install of Penumbra in your devPlugins folder.\n\n"
                   + "This can cause some issues, so please go to your \"%%appdata%%\\XIVLauncher\\devPlugins\" folder and delete the Penumbra folder from there.\n\n"
-                  + "If you are developing for Penumbra, try to avoid mixing versions. This warning will not appear if compiled in Debug mode.", false );
+                  + "If you are developing for Penumbra, try to avoid mixing versions. This warning will not appear if compiled in Debug mode.");
             }
             else
             {
-                using var bar = ImRaii.TabBar( string.Empty, ImGuiTabBarFlags.NoTooltip );
-                SetupSizes();
-                _settingsTab.Draw();
-                DrawModsTab();
-                _collectionsTab.Draw();
-                DrawChangedItemTab();
-                _effectiveTab.Draw();
-                _debugTab.Draw();
-                _resourceTab.Draw();
+                _configTabs.Draw();
             }
+
+            _lastException = null;
         }
-        catch( Exception e )
+        catch (Exception e)
         {
-            Penumbra.Log.Error( $"Exception thrown during UI Render:\n{e}" );
+            if (_lastException != null)
+            {
+                var text = e.ToString();
+                if (text == _lastException)
+                    return;
+
+                _lastException = text;
+            }
+            else
+            {
+                _lastException = e.ToString();
+            }
+
+            Penumbra.Log.Error($"Exception thrown during UI Render:\n{_lastException}");
         }
     }
 
-    private static void DrawProblemWindow( string text, bool withExceptions )
+    private static string GetLabel(ValidityChecker checker)
+        => checker.Version.Length == 0
+            ? "Penumbra###PenumbraConfigWindow"
+            : $"Penumbra v{checker.Version}###PenumbraConfigWindow";
+
+    private void DrawProblemWindow(string text)
     {
-        using var color = ImRaii.PushColor( ImGuiCol.Text, Colors.RegexWarningBorder );
+        using var color = ImRaii.PushColor(ImGuiCol.Text, Colors.RegexWarningBorder);
         ImGui.NewLine();
         ImGui.NewLine();
-        ImGuiUtil.TextWrapped( text );
+        ImGuiUtil.TextWrapped(text);
         color.Pop();
 
         ImGui.NewLine();
         ImGui.NewLine();
-        SettingsTab.DrawDiscordButton( 0 );
+        UiHelpers.DrawDiscordButton(0);
         ImGui.SameLine();
-        SettingsTab.DrawSupportButton();
+        UiHelpers.DrawSupportButton(_penumbra!);
         ImGui.NewLine();
         ImGui.NewLine();
+    }
 
-        if( withExceptions )
+    private void DrawImcExceptions()
+    {
+        ImGui.TextUnformatted("Exceptions");
+        ImGui.Separator();
+        using var box = ImRaii.ListBox("##Exceptions", new Vector2(-1, -1));
+        foreach (var exception in _validityChecker.ImcExceptions)
         {
-            ImGui.TextUnformatted( "Exceptions" );
+            ImGuiUtil.TextWrapped(exception.ToString());
             ImGui.Separator();
-            using var box = ImRaii.ListBox( "##Exceptions", new Vector2( -1, -1 ) );
-            foreach( var exception in Penumbra.ImcExceptions )
-            {
-                ImGuiUtil.TextWrapped( exception.ToString() );
-                ImGui.Separator();
-                ImGui.NewLine();
-            }
+            ImGui.NewLine();
         }
-    }
-
-    public void Dispose()
-    {
-        _selector.Dispose();
-        _modPanel.Dispose();
-        _collectionsTab.Dispose();
-        ModEditPopup.Dispose();
-    }
-
-    private static string GetLabel()
-        => Penumbra.Version.Length == 0
-            ? "Penumbra###PenumbraConfigWindow"
-            : $"Penumbra v{Penumbra.Version}###PenumbraConfigWindow";
-
-    private Vector2 _defaultSpace;
-    private Vector2 _inputTextWidth;
-    private Vector2 _iconButtonSize;
-
-    private void SetupSizes()
-    {
-        _defaultSpace   = new Vector2( 0, 10 * ImGuiHelpers.GlobalScale );
-        _inputTextWidth = new Vector2( 350f  * ImGuiHelpers.GlobalScale, 0 );
-        _iconButtonSize = new Vector2( ImGui.GetFrameHeight() );
     }
 }

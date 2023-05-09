@@ -2,10 +2,9 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Text;
 using Newtonsoft.Json;
-using OtterGui;
 using Penumbra.Api.Enums;
+using Penumbra.Import.Structs;
 using Penumbra.Mods;
 using Penumbra.Util;
 using SharpCompress.Archives.Zip;
@@ -34,14 +33,14 @@ public partial class TexToolsImporter
 
         var modList = modListRaw.Select( m => JsonConvert.DeserializeObject< SimpleMod >( m, JsonSettings )! ).ToList();
 
-        _currentModDirectory = Mod.CreateModFolder( _baseDirectory, Path.GetFileNameWithoutExtension( modPackFile.Name ) );
+        _currentModDirectory = ModCreator.CreateModFolder( _baseDirectory, Path.GetFileNameWithoutExtension( modPackFile.Name ) );
         // Create a new ModMeta from the TTMP mod list info
-        Mod.CreateMeta( _currentModDirectory, _currentModName, DefaultTexToolsData.Author, DefaultTexToolsData.Description, null, null );
+        _modManager.DataEditor.CreateMeta( _currentModDirectory, _currentModName, DefaultTexToolsData.Author, DefaultTexToolsData.Description, null, null );
 
         // Open the mod data file from the mod pack as a SqPackStream
         _streamDisposer = GetSqPackStreamStream( extractedModPack, "TTMPD.mpd" );
         ExtractSimpleModList( _currentModDirectory, modList );
-        Mod.CreateDefaultFiles( _currentModDirectory );
+        _modManager.Creator.CreateDefaultFiles( _currentModDirectory );
         ResetStreamDisposer();
         return _currentModDirectory;
     }
@@ -90,15 +89,15 @@ public partial class TexToolsImporter
         _currentOptionName = DefaultTexToolsData.DefaultOption;
         Penumbra.Log.Information( "    -> Importing Simple V2 ModPack" );
 
-        _currentModDirectory = Mod.CreateModFolder( _baseDirectory, _currentModName );
-        Mod.CreateMeta( _currentModDirectory, _currentModName, modList.Author, string.IsNullOrEmpty( modList.Description )
+        _currentModDirectory = ModCreator.CreateModFolder( _baseDirectory, _currentModName );
+        _modManager.DataEditor.CreateMeta( _currentModDirectory, _currentModName, modList.Author, string.IsNullOrEmpty( modList.Description )
             ? "Mod imported from TexTools mod pack"
             : modList.Description, modList.Version, modList.Url );
 
         // Open the mod data file from the mod pack as a SqPackStream
         _streamDisposer = GetSqPackStreamStream( extractedModPack, "TTMPD.mpd" );
         ExtractSimpleModList( _currentModDirectory, modList.SimpleModsList );
-        Mod.CreateDefaultFiles( _currentModDirectory );
+        _modManager.Creator.CreateDefaultFiles( _currentModDirectory );
         ResetStreamDisposer();
         return _currentModDirectory;
     }
@@ -135,8 +134,8 @@ public partial class TexToolsImporter
         _currentNumOptions = GetOptionCount( modList );
         _currentModName    = modList.Name;
 
-        _currentModDirectory = Mod.CreateModFolder( _baseDirectory, _currentModName );
-        Mod.CreateMeta( _currentModDirectory, _currentModName, modList.Author, modList.Description, modList.Version, modList.Url );
+        _currentModDirectory = ModCreator.CreateModFolder( _baseDirectory, _currentModName );
+        _modManager.DataEditor.CreateMeta( _currentModDirectory, _currentModName, modList.Author, modList.Description, modList.Version, modList.Url );
 
         if( _currentNumOptions == 0 )
         {
@@ -173,8 +172,7 @@ public partial class TexToolsImporter
                 {
                     var name           = numGroups == 1 ? _currentGroupName : $"{_currentGroupName}, Part {groupId + 1}";
                     options.Clear();
-                    var description = new StringBuilder();
-                    var groupFolder = Mod.NewSubFolderName( _currentModDirectory, name )
+                    var groupFolder = ModCreator.NewSubFolderName( _currentModDirectory, name )
                      ?? new DirectoryInfo( Path.Combine( _currentModDirectory.FullName,
                             numGroups == 1 ? $"Group {groupPriority + 1}" : $"Group {groupPriority + 1}, Part {groupId + 1}" ) );
 
@@ -184,16 +182,10 @@ public partial class TexToolsImporter
                         var option = allOptions[ i + optionIdx ];
                         _token.ThrowIfCancellationRequested();
                         _currentOptionName = option.Name;
-                        var optionFolder = Mod.NewSubFolderName( groupFolder, option.Name )
+                        var optionFolder = ModCreator.NewSubFolderName( groupFolder, option.Name )
                          ?? new DirectoryInfo( Path.Combine( groupFolder.FullName, $"Option {i + optionIdx + 1}" ) );
                         ExtractSimpleModList( optionFolder, option.ModsJsons );
-                        options.Add( Mod.CreateSubMod( _currentModDirectory, optionFolder, option ) );
-                        description.Append( option.Description );
-                        if( !string.IsNullOrEmpty( option.Description ) )
-                        {
-                            description.Append( '\n' );
-                        }
-
+                        options.Add( _modManager.Creator.CreateSubMod( _currentModDirectory, optionFolder, option ) );
                         if( option.IsChecked )
                         {
                             defaultSettings = group.SelectionType == GroupType.Multi
@@ -214,20 +206,20 @@ public partial class TexToolsImporter
                         if( empty != null )
                         {
                             _currentOptionName = empty.Name;
-                            options.Insert( 0, Mod.CreateEmptySubMod( empty.Name ) );
+                            options.Insert( 0, ModCreator.CreateEmptySubMod( empty.Name ) );
                             defaultSettings = defaultSettings == null ? 0 : defaultSettings.Value + 1;
                         }
                     }
 
-                    Mod.CreateOptionGroup( _currentModDirectory, group.SelectionType, name, groupPriority, groupPriority,
-                        defaultSettings ?? 0, description.ToString(), options );
+                    _modManager.Creator.CreateOptionGroup( _currentModDirectory, group.SelectionType, name, groupPriority, groupPriority,
+                        defaultSettings ?? 0, group.Description, options );
                     ++groupPriority;
                 }
             }
         }
 
         ResetStreamDisposer();
-        Mod.CreateDefaultFiles( _currentModDirectory );
+        _modManager.Creator.CreateDefaultFiles( _currentModDirectory );
         return _currentModDirectory;
     }
 

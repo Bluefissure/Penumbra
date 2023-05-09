@@ -3,22 +3,24 @@ using System.Runtime.InteropServices;
 
 namespace Penumbra.GameData.Structs;
 
-[StructLayout( LayoutKind.Explicit, Pack = 1 )]
-public readonly struct CharacterArmor : IEquatable< CharacterArmor >
+[StructLayout(LayoutKind.Explicit, Pack = 1)]
+public struct CharacterArmor : IEquatable<CharacterArmor>
 {
-    [FieldOffset( 0 )]
-    public readonly uint Value;
+    public const int Size = 4;
 
-    [FieldOffset( 0 )]
-    public readonly SetId Set;
+    [FieldOffset(0)]
+    public uint Value;
 
-    [FieldOffset( 2 )]
-    public readonly byte Variant;
+    [FieldOffset(0)]
+    public SetId Set;
 
-    [FieldOffset( 3 )]
-    public readonly StainId Stain;
+    [FieldOffset(2)]
+    public byte Variant;
 
-    public CharacterArmor( SetId set, byte variant, StainId stain )
+    [FieldOffset(3)]
+    public StainId Stain;
+
+    public CharacterArmor(SetId set, byte variant, StainId stain)
     {
         Value   = 0;
         Set     = set;
@@ -26,23 +28,32 @@ public readonly struct CharacterArmor : IEquatable< CharacterArmor >
         Stain   = stain;
     }
 
+    public CharacterArmor With(StainId stain)
+        => new(Set, Variant, stain);
+
+    public CharacterWeapon ToWeapon()
+        => new(Set, 0, Variant, Stain);
+
+    public CharacterWeapon ToWeapon(StainId stain)
+        => new(Set, 0, Variant, stain);
+
     public override string ToString()
         => $"{Set},{Variant},{Stain}";
 
     public static readonly CharacterArmor Empty;
 
-    public bool Equals( CharacterArmor other )
+    public bool Equals(CharacterArmor other)
         => Value == other.Value;
 
-    public override bool Equals( object? obj )
-        => obj is CharacterArmor other && Equals( other );
+    public override bool Equals(object? obj)
+        => obj is CharacterArmor other && Equals(other);
 
     public override int GetHashCode()
-        => ( int )Value;
+        => (int)Value;
 
-    public static bool operator ==( CharacterArmor left, CharacterArmor right )
+    public static bool operator ==(CharacterArmor left, CharacterArmor right)
         => left.Value == right.Value;
 
-    public static bool operator !=( CharacterArmor left, CharacterArmor right )
+    public static bool operator !=(CharacterArmor left, CharacterArmor right)
         => left.Value != right.Value;
 }

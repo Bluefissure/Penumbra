@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Runtime.InteropServices;
 using Dalamud.Game.ClientState.Objects.Enums;
 using Newtonsoft.Json.Linq;
@@ -14,18 +15,26 @@ public readonly struct ActorIdentifier : IEquatable<ActorIdentifier>
 
     public static readonly ActorIdentifier Invalid = new(IdentifierType.Invalid, 0, 0, 0, ByteString.Empty);
 
+    public enum RetainerType : ushort
+    {
+        Both = 0,
+        Bell = 1,
+        Mannequin = 2,
+    }
+
     // @formatter:off
     [FieldOffset( 0 )] public readonly IdentifierType Type;       // All
     [FieldOffset( 1 )] public readonly ObjectKind     Kind;       // Npc, Owned
     [FieldOffset( 2 )] public readonly ushort         HomeWorld;  // Player, Owned
     [FieldOffset( 2 )] public readonly ushort         Index;      // NPC
-    [FieldOffset( 2 )] public readonly SpecialActor   Special;    // Special
+    [FieldOffset( 2 )] public readonly RetainerType   Retainer;   // Retainer
+    [FieldOffset( 2 )] public readonly ScreenActor    Special;    // Special
     [FieldOffset( 4 )] public readonly uint           DataId;     // Owned, NPC
     [FieldOffset( 8 )] public readonly ByteString     PlayerName; // Player, Owned
     // @formatter:on
 
     public ActorIdentifier CreatePermanent()
-        => new(Type, Kind, Index, DataId, PlayerName.IsEmpty ? PlayerName : PlayerName.Clone());
+        => new(Type, Kind, Index, DataId, PlayerName.IsEmpty || PlayerName.IsOwned ? PlayerName : PlayerName.Clone());
 
     public bool Equals(ActorIdentifier other)
     {
@@ -56,6 +65,17 @@ public readonly struct ActorIdentifier : IEquatable<ActorIdentifier>
 
     public bool IsValid
         => Type is not (IdentifierType.UnkObject or IdentifierType.Invalid);
+
+    public string Incognito(string? name)
+    {
+        name ??= ToString();
+        if (Type is not (IdentifierType.Player or IdentifierType.Owned))
+            return name;
+
+        var parts = name.Split(' ', 3);
+        return string.Join(" ",
+            parts.Length != 3 ? parts.Select(n => $"{n[0]}.") : parts[..2].Select(n => $"{n[0]}.").Append(parts[2]));
+    }
 
     public override string ToString()
         => Manager?.ToString(this)
@@ -91,7 +111,7 @@ public readonly struct ActorIdentifier : IEquatable<ActorIdentifier>
     {
         Type       = type;
         Kind       = kind;
-        Special    = (SpecialActor)index;
+        Special    = (ScreenActor)index;
         HomeWorld  = Index = index;
         DataId     = data;
         PlayerName = playerName;
@@ -189,14 +209,14 @@ public static class ActorManagerExtensions
     /// <summary>
     /// Fixed names for special actors.
     /// </summary>
-    public static string ToName(this SpecialActor actor)
+    public static string ToName(this ScreenActor actor)
         => actor switch
         {
-            SpecialActor.CharacterScreen => "Character Screen Actor",
-            SpecialActor.ExamineScreen   => "Examine Screen Actor",
-            SpecialActor.FittingRoom     => "Fitting Room Actor",
-            SpecialActor.DyePreview      => "Dye Preview Actor",
-            SpecialActor.Portrait        => "Portrait Actor",
+            ScreenActor.CharacterScreen => "Character Screen Actor",
+            ScreenActor.ExamineScreen   => "Examine Screen Actor",
+            ScreenActor.FittingRoom     => "Fitting Room Actor",
+            ScreenActor.DyePreview      => "Dye Preview Actor",
+            ScreenActor.Portrait        => "Portrait Actor",
             _                            => "Invalid",
         };
 }
