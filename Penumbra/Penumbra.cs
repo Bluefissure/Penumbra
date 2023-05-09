@@ -25,31 +25,24 @@ namespace Penumbra;
 
 public class Penumbra : IDalamudPlugin
 {
-    public const string Repository          = "https://raw.githubusercontent.com/Bluefissure/Penumbra/cn/repo.json";
-    public const string RepositoryLower     = "https://raw.githubusercontent.com/bluefissure/penumbra/cn/repo.json";
-    public const string TestRepositoryLower = "https://raw.githubusercontent.com/bluefissure/penumbra/test/repo.json";
-    public const string FastRepositoryLower = "https://raw.fastgit.org/bluefissure/penumbra/cn/repo.json";
-    public const string GhProxyRepositoryLower = "https://ghproxy.com/https://raw.githubusercontent.com/bluefissure/penumbra/cn/repo.json";
-    public const string CnRepositoryLower = "https://dalamud_cn_3rd.otters.cloud/plugins/all";
-
     public string Name
         => "Penumbra";
 
-    public static readonly Logger      Log = new();
-    public static          ChatService ChatService { get; private set; } = null!;
+    public static readonly Logger Log = new();
+    public static ChatService ChatService { get; private set; } = null!;
 
-    private readonly ValidityChecker         _validityChecker;
+    private readonly ValidityChecker _validityChecker;
     private readonly ResidentResourceManager _residentResources;
-    private readonly TempModManager          _tempMods;
-    private readonly TempCollectionManager   _tempCollections;
-    private readonly ModManager              _modManager;
-    private readonly CollectionManager       _collectionManager;
-    private readonly Configuration           _config;
-    private readonly CharacterUtility        _characterUtility;
-    private readonly RedrawService           _redrawService;
-    private readonly CommunicatorService     _communicatorService;
-    private          PenumbraWindowSystem?   _windowSystem;
-    private          bool                    _disposed;
+    private readonly TempModManager _tempMods;
+    private readonly TempCollectionManager _tempCollections;
+    private readonly ModManager _modManager;
+    private readonly CollectionManager _collectionManager;
+    private readonly Configuration _config;
+    private readonly CharacterUtility _characterUtility;
+    private readonly RedrawService _redrawService;
+    private readonly CommunicatorService _communicatorService;
+    private PenumbraWindowSystem? _windowSystem;
+    private bool _disposed;
 
     private readonly ServiceProvider _services;
 
@@ -57,21 +50,21 @@ public class Penumbra : IDalamudPlugin
     {
         try
         {
-            var       startTimer = new StartTracker();
-            using var timer      = startTimer.Measure(StartTimeType.Total);
-            _services        = ServiceManager.CreateProvider(this, pluginInterface, Log, startTimer);
-            ChatService      = _services.GetRequiredService<ChatService>();
+            var startTimer = new StartTracker();
+            using var timer = startTimer.Measure(StartTimeType.Total);
+            _services = ServiceManager.CreateProvider(this, pluginInterface, Log, startTimer);
+            ChatService = _services.GetRequiredService<ChatService>();
             _validityChecker = _services.GetRequiredService<ValidityChecker>();
             _services.GetRequiredService<BackupService>(); // Initialize because not required anywhere else.
-            _config            = _services.GetRequiredService<Configuration>();
-            _characterUtility  = _services.GetRequiredService<CharacterUtility>();
-            _tempMods          = _services.GetRequiredService<TempModManager>();
+            _config = _services.GetRequiredService<Configuration>();
+            _characterUtility = _services.GetRequiredService<CharacterUtility>();
+            _tempMods = _services.GetRequiredService<TempModManager>();
             _residentResources = _services.GetRequiredService<ResidentResourceManager>();
             _services.GetRequiredService<ResourceManagerService>(); // Initialize because not required anywhere else.
-            _modManager          = _services.GetRequiredService<ModManager>();
-            _collectionManager   = _services.GetRequiredService<CollectionManager>();
-            _tempCollections     = _services.GetRequiredService<TempCollectionManager>();
-            _redrawService       = _services.GetRequiredService<RedrawService>();
+            _modManager = _services.GetRequiredService<ModManager>();
+            _collectionManager = _services.GetRequiredService<CollectionManager>();
+            _tempCollections = _services.GetRequiredService<TempCollectionManager>();
+            _redrawService = _services.GetRequiredService<RedrawService>();
             _communicatorService = _services.GetRequiredService<CommunicatorService>();
             _services.GetRequiredService<ResourceService>(); // Initialize because not required anywhere else.
             _services.GetRequiredService<ModCacheManager>(); // Initialize because not required anywhere else.
@@ -103,7 +96,7 @@ public class Penumbra : IDalamudPlugin
     private void SetupApi()
     {
         using var timer = _services.GetRequiredService<StartTracker>().Measure(StartTimeType.Api);
-        var       api   = _services.GetRequiredService<IPenumbraApi>();
+        var api = _services.GetRequiredService<IPenumbraApi>();
         _services.GetRequiredService<PenumbraIpcProviders>();
         api.ChangedItemTooltip += it =>
         {
@@ -120,16 +113,16 @@ public class Penumbra : IDalamudPlugin
     private void SetupInterface()
     {
         Task.Run(() =>
-            {
-                using var tInterface = _services.GetRequiredService<StartTracker>().Measure(StartTimeType.Interface);
-                var       system     = _services.GetRequiredService<PenumbraWindowSystem>();
-                system.Window.Setup(this, _services.GetRequiredService<ConfigTabBar>());
-                _services.GetRequiredService<CommandHandler>();
-                if (!_disposed)
-                    _windowSystem = system;
-                else
-                    system.Dispose();
-            }
+        {
+            using var tInterface = _services.GetRequiredService<StartTracker>().Measure(StartTimeType.Interface);
+            var system = _services.GetRequiredService<PenumbraWindowSystem>();
+            system.Window.Setup(this, _services.GetRequiredService<ConfigTabBar>());
+            _services.GetRequiredService<CommandHandler>();
+            if (!_disposed)
+                _windowSystem = system;
+            else
+                system.Dispose();
+        }
         );
     }
 
@@ -178,9 +171,9 @@ public class Penumbra : IDalamudPlugin
 
     public string GatherSupportInformation()
     {
-        var sb     = new StringBuilder(10240);
+        var sb = new StringBuilder(10240);
         var exists = _config.ModDirectory.Length > 0 && Directory.Exists(_config.ModDirectory);
-        var drive  = exists ? new DriveInfo(new DirectoryInfo(_config.ModDirectory).Root.FullName) : null;
+        var drive = exists ? new DriveInfo(new DirectoryInfo(_config.ModDirectory).Root.FullName) : null;
         sb.AppendLine("**Settings**");
         sb.Append($"> **`Plugin Version:              `** {_validityChecker.Version}\n");
         sb.Append($"> **`Commit Hash:                 `** {_validityChecker.CommitHash}\n");

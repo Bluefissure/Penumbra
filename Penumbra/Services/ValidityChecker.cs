@@ -10,9 +10,12 @@ namespace Penumbra.Services;
 
 public class ValidityChecker
 {
-    public const string Repository          = "https://raw.githubusercontent.com/xivdev/Penumbra/master/repo.json";
-    public const string RepositoryLower     = "https://raw.githubusercontent.com/xivdev/penumbra/master/repo.json";
-    public const string TestRepositoryLower = "https://raw.githubusercontent.com/xivdev/penumbra/test/repo.json";
+    public const string Repository = "https://raw.githubusercontent.com/Bluefissure/Penumbra/cn/repo.json";
+    public const string RepositoryLower = "https://raw.githubusercontent.com/bluefissure/penumbra/cn/repo.json";
+    public const string TestRepositoryLower = "https://raw.githubusercontent.com/bluefissure/penumbra/test/repo.json";
+    public const string FastRepositoryLower = "https://raw.fastgit.org/bluefissure/penumbra/cn/repo.json";
+    public const string GhProxyRepositoryLower = "https://ghproxy.com/https://raw.githubusercontent.com/bluefissure/penumbra/cn/repo.json";
+    public const string CnRepositoryLower = "https://dalamud_cn_3rd.otters.cloud/plugins/all";
 
     public readonly bool DevPenumbraExists;
     public readonly bool IsNotInstalledPenumbra;
@@ -85,8 +88,11 @@ public class ValidityChecker
         return pi.SourceRepository.Trim().ToLowerInvariant() switch
         {
             null                => false,
-            RepositoryLower     => true,
+            RepositoryLower => true,
             TestRepositoryLower => true,
+            FastRepositoryLower => true,
+            GhProxyRepositoryLower => true,
+            CnRepositoryLower => true,
             _                   => false,
         };
 #else

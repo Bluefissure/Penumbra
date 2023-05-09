@@ -7,8 +7,8 @@
         <Company>absolute gangstas</Company>
         <Product>Penumbra</Product>
         <Copyright>Copyright © 2022</Copyright>
-        <FileVersion>1.0.0.0</FileVersion>
-        <AssemblyVersion>1.0.0.0</AssemblyVersion>
+        <FileVersion>0.7.0.10</FileVersion>
+        <AssemblyVersion>0.7.0.10</AssemblyVersion>
         <OutputPath>bin\$(Configuration)\</OutputPath>
         <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
         <Nullable>enable</Nullable>
@@ -30,7 +30,7 @@
     </ItemGroup>
 
     <PropertyGroup>
-        <DalamudLibPath>$(AppData)\XIVLauncher\addon\Hooks\dev\</DalamudLibPath>
+        <DalamudLibPath>E:\Game\XIVLauncherCN\XIVLauncherCN\Roaming\addon\Hooks\dev\</DalamudLibPath>
     </PropertyGroup>
 
     <ItemGroup>

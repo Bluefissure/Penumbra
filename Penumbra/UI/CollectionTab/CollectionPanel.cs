@@ -50,7 +50,7 @@ public sealed class CollectionPanel : IDisposable
         _mods                   = mods;
         _individualAssignmentUi = new IndividualAssignmentUi(communicator, actors, manager);
         _inheritanceUi          = new InheritanceUi(manager, _selector);
-        _nameFont               = pi.UiBuilder.GetGameFontHandle(new GameFontStyle(GameFontFamilyAndSize.Jupiter23));
+        _nameFont               = pi.UiBuilder.GetGameFontHandle(new GameFontStyle(GameFontFamilyAndSize.ChnAxis180));
     }
 
     public void Dispose()

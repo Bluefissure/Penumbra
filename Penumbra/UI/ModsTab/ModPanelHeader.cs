@@ -17,7 +17,7 @@ public class ModPanelHeader : IDisposable
     private readonly GameFontHandle _nameFont;
 
     public ModPanelHeader(DalamudPluginInterface pi)
-        => _nameFont = pi.UiBuilder.GetGameFontHandle(new GameFontStyle(GameFontFamilyAndSize.Jupiter23));
+        => _nameFont = pi.UiBuilder.GetGameFontHandle(new GameFontStyle(GameFontFamilyAndSize.ChnAxis180));
 
     /// <summary>
     /// Draw the header for the current mod,
