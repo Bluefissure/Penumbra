@@ -1,12 +1,7 @@
-using System;
+using Penumbra.Api.Enums;
 using Penumbra.GameData.Files;
 using Penumbra.Meta.Manipulations;
 using Penumbra.String.Classes;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
-using System.Security.Cryptography;
-using Penumbra.GameData.Enums;
 using Penumbra.Meta;
 using static Penumbra.Mods.ItemSwap.ItemSwap;
 using Penumbra.Services;

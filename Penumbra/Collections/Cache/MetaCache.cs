@@ -1,6 +1,3 @@
-using System;
-using System.Collections;
-using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using Penumbra.GameData.Enums;
 using Penumbra.Interop.Services;
@@ -25,7 +22,12 @@ public class MetaCache : IDisposable, IEnumerable<KeyValuePair<MetaManipulation,
     private readonly ImcCache                           _imcCache      = new();
 
     public bool TryGetValue(MetaManipulation manip, [NotNullWhen(true)] out IMod? mod)
-        => _manipulations.TryGetValue(manip, out mod);
+    {
+        lock (_manipulations)
+        {
+            return _manipulations.TryGetValue(manip, out mod);
+        }
+    }
 
     public int Count
         => _manipulations.Count;
@@ -54,7 +56,7 @@ public class MetaCache : IDisposable, IEnumerable<KeyValuePair<MetaManipulation,
         _estCache.SetFiles(_manager);
         _gmpCache.SetFiles(_manager);
         _cmpCache.SetFiles(_manager);
-        _imcCache.SetFiles(_collection);
+        _imcCache.SetFiles(_collection, false);
     }
 
     public void Reset()
@@ -85,10 +87,13 @@ public class MetaCache : IDisposable, IEnumerable<KeyValuePair<MetaManipulation,
 
     public bool ApplyMod(MetaManipulation manip, IMod mod)
     {
-        if (_manipulations.ContainsKey(manip))
-            _manipulations.Remove(manip);
+        lock (_manipulations)
+        {
+            if (_manipulations.ContainsKey(manip))
+                _manipulations.Remove(manip);
 
-        _manipulations[manip] = mod;
+            _manipulations[manip] = mod;
+        }
 
         if (!_manager.CharacterUtility.Ready)
             return true;
@@ -108,11 +113,14 @@ public class MetaCache : IDisposable, IEnumerable<KeyValuePair<MetaManipulation,
         };
     }
 
-    public bool RevertMod(MetaManipulation manip)
+    public bool RevertMod(MetaManipulation manip, [NotNullWhen(true)] out IMod? mod)
     {
-        var ret = _manipulations.Remove(manip);
-        if (!_manager.CharacterUtility.Ready)
-            return ret;
+        lock (_manipulations)
+        {
+            var ret = _manipulations.Remove(manip, out mod);
+            if (!_manager.CharacterUtility.Ready)
+                return ret;
+        }
 
         // Imc manipulations do not require character utility,
         // but they do require the file space to be ready.
@@ -156,8 +164,8 @@ public class MetaCache : IDisposable, IEnumerable<KeyValuePair<MetaManipulation,
     }
 
     /// <summary> Set the currently relevant IMC files for the collection cache. </summary>
-    public void SetImcFiles()
-        => _imcCache.SetFiles(_collection);
+    public void SetImcFiles(bool fromFullCompute)
+        => _imcCache.SetFiles(_collection, fromFullCompute);
 
     public MetaList.MetaReverter TemporarilySetEqpFile()
         => _eqpCache.TemporarilySetFiles(_manager);
@@ -186,21 +194,24 @@ public class MetaCache : IDisposable, IEnumerable<KeyValuePair<MetaManipulation,
             return;
 
         var loaded = 0;
-        foreach (var manip in Manipulations)
+        lock (_manipulations)
         {
-            loaded += manip.ManipulationType switch
+            foreach (var manip in Manipulations)
             {
-                MetaManipulation.Type.Eqp     => _eqpCache.ApplyMod(_manager, manip.Eqp),
-                MetaManipulation.Type.Eqdp    => _eqdpCache.ApplyMod(_manager, manip.Eqdp),
-                MetaManipulation.Type.Est     => _estCache.ApplyMod(_manager, manip.Est),
-                MetaManipulation.Type.Gmp     => _gmpCache.ApplyMod(_manager, manip.Gmp),
-                MetaManipulation.Type.Rsp     => _cmpCache.ApplyMod(_manager, manip.Rsp),
-                MetaManipulation.Type.Imc     => _imcCache.ApplyMod(_manager, _collection, manip.Imc),
-                MetaManipulation.Type.Unknown => false,
-                _                             => false,
+                loaded += manip.ManipulationType switch
+                {
+                    MetaManipulation.Type.Eqp     => _eqpCache.ApplyMod(_manager, manip.Eqp),
+                    MetaManipulation.Type.Eqdp    => _eqdpCache.ApplyMod(_manager, manip.Eqdp),
+                    MetaManipulation.Type.Est     => _estCache.ApplyMod(_manager, manip.Est),
+                    MetaManipulation.Type.Gmp     => _gmpCache.ApplyMod(_manager, manip.Gmp),
+                    MetaManipulation.Type.Rsp     => _cmpCache.ApplyMod(_manager, manip.Rsp),
+                    MetaManipulation.Type.Imc     => _imcCache.ApplyMod(_manager, _collection, manip.Imc),
+                    MetaManipulation.Type.Unknown => false,
+                    _                             => false,
+                }
+                    ? 1
+                    : 0;
             }
-                ? 1
-                : 0;
         }
 
         _manager.ApplyDefaultFiles(_collection);

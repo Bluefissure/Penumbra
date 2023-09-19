@@ -1,5 +1,3 @@
-using System;
-using System.Numerics;
 using Dalamud.Game.ClientState.Objects;
 using Dalamud.Interface;
 using Dalamud.Plugin;
@@ -41,7 +39,7 @@ public class CollectionsTab : IDisposable, ITab
     }
 
     public CollectionsTab(DalamudPluginInterface pi, Configuration configuration, CommunicatorService communicator,
-        CollectionManager collectionManager, ModStorage modStorage, ActorService actors, TargetManager targets, TutorialService tutorial)
+        CollectionManager collectionManager, ModStorage modStorage, ActorService actors, ITargetManager targets, TutorialService tutorial)
     {
         _config   = configuration;
         _tutorial = tutorial;
@@ -60,11 +58,12 @@ public class CollectionsTab : IDisposable, ITab
 
     public void DrawContent()
     {
-        var       width = ImGui.CalcTextSize("nnnnnnnnnnnnnnnnnnnnnnnnnn").X;
+        var width = ImGui.CalcTextSize("nnnnnnnnnnnnnnnnnnnnnnnnnn").X;
         using (var group = ImRaii.Group())
         {
             _selector.Draw(width);
         }
+
         _tutorial.OpenTutorial(BasicTutorialSteps.EditingCollections);
 
         ImGui.SameLine();
@@ -93,7 +92,7 @@ public class CollectionsTab : IDisposable, ITab
         color.Pop();
         _tutorial.OpenTutorial(BasicTutorialSteps.SimpleAssignments);
         ImGui.SameLine();
-        
+
         color.Push(ImGuiCol.Button, ImGui.GetColorU32(ImGuiCol.TabActive), Mode is PanelMode.IndividualAssignment);
         if (ImGui.Button("Individual Assignments", buttonSize))
             Mode = PanelMode.IndividualAssignment;
@@ -114,7 +113,7 @@ public class CollectionsTab : IDisposable, ITab
         color.Pop();
         _tutorial.OpenTutorial(BasicTutorialSteps.CollectionDetails);
         ImGui.SameLine();
-        
+
         style.Push(ImGuiStyleVar.FrameBorderSize, ImGuiHelpers.GlobalScale);
         color.Push(ImGuiCol.Text, ColorId.FolderExpanded.Value())
             .Push(ImGuiCol.Border, ColorId.FolderExpanded.Value());

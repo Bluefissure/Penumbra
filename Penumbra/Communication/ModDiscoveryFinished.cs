@@ -1,5 +1,5 @@
-using System;
-using Penumbra.Util;
+using OtterGui.Classes;
+using Penumbra.Mods.Manager;
 
 namespace Penumbra.Communication;
 
@@ -20,7 +20,7 @@ public sealed class ModDiscoveryFinished : EventWrapper<Action, ModDiscoveryFini
         /// <seealso cref="Mods.Manager.ModCacheManager.OnModDiscoveryFinished"/>
         ModCacheManager = 0,
 
-        /// <seealso cref="Mods.ModFileSystem.Reload"/>
+        /// <seealso cref="Mods.Manager.ModFileSystem.Reload"/>
         ModFileSystem = 0,
     }
 

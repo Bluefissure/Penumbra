@@ -1,21 +1,20 @@
-using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
-using System.Numerics;
 using Dalamud.Configuration;
+using Dalamud.Interface.Internal.Notifications;
 using Newtonsoft.Json;
 using OtterGui;
 using OtterGui.Classes;
 using OtterGui.Filesystem;
 using OtterGui.Widgets;
-using Penumbra.GameData.Enums;
+using Penumbra.Api.Enums;
+using Penumbra.Enums;
 using Penumbra.Import.Structs;
 using Penumbra.Interop.Services;
 using Penumbra.Mods;
+using Penumbra.Mods.Manager;
 using Penumbra.Services;
 using Penumbra.UI;
 using Penumbra.UI.Classes;
+using Penumbra.UI.ResourceWatcher;
 using Penumbra.UI.Tabs;
 using ErrorEventArgs = Newtonsoft.Json.Serialization.ErrorEventArgs;
 
@@ -36,9 +35,10 @@ public class Configuration : IPluginConfiguration, ISavable
     public string ModDirectory    { get; set; } = string.Empty;
     public string ExportDirectory { get; set; } = string.Empty;
 
-    public bool HideUiInGPose      { get; set; } = false;
-    public bool HideUiInCutscenes  { get; set; } = true;
-    public bool HideUiWhenUiHidden { get; set; } = false;
+    public bool HideUiInGPose                  { get; set; } = false;
+    public bool HideUiInCutscenes              { get; set; } = true;
+    public bool HideUiWhenUiHidden             { get; set; } = false;
+    public bool UseDalamudUiTextureRedirection { get; set; } = true;
 
     public bool UseCharacterCollectionInMainWindow { get; set; } = true;
     public bool UseCharacterCollectionsInCards     { get; set; } = true;
@@ -46,7 +46,9 @@ public class Configuration : IPluginConfiguration, ISavable
     public bool UseCharacterCollectionInTryOn      { get; set; } = true;
     public bool UseOwnerNameForCharacterCollection { get; set; } = true;
     public bool UseNoModsInInspect                 { get; set; } = false;
+    public bool HideChangedItemFilters             { get; set; } = false;
 
+    public bool HidePrioritiesInSelector  { get; set; } = false;
     public bool HideRedrawBar             { get; set; } = false;
     public int  OptionGroupCollapsibleMin { get; set; } = 5;
 
@@ -87,10 +89,14 @@ public class Configuration : IPluginConfiguration, ISavable
     public string                   QuickMoveFolder3        { get; set; } = string.Empty;
     public DoubleModifier           DeleteModModifier       { get; set; } = new(ModifierHotkey.Control, ModifierHotkey.Shift);
     public CollectionsTab.PanelMode CollectionPanel         { get; set; } = CollectionsTab.PanelMode.SimpleAssignment;
+    public TabType                  SelectedTab             { get; set; } = TabType.Settings;
+
+    public ChangedItemDrawer.ChangedItemIcon ChangedItemFilter { get; set; } = ChangedItemDrawer.DefaultFlags;
 
     public bool PrintSuccessfulCommandsToChat { get; set; } = true;
     public bool FixMainWindow                 { get; set; } = false;
     public bool AutoDeduplicateOnImport       { get; set; } = true;
+    public bool UseFileSystemCompression      { get; set; } = true;
     public bool EnableHttpApi                 { get; set; } = true;
 
     public string DefaultModImportPath    { get; set; } = string.Empty;
@@ -105,14 +111,13 @@ public class Configuration : IPluginConfiguration, ISavable
     /// Load the current configuration.
     /// Includes adding new colors and migrating from old versions.
     /// </summary>
-    public Configuration(CharacterUtility utility, FilenameService fileNames, ConfigMigrationService migrator, SaveService saveService)
+    public Configuration(CharacterUtility utility, ConfigMigrationService migrator, SaveService saveService)
     {
         _saveService = saveService;
-        Load(utility, fileNames, migrator);
-        UI.Classes.Colors.SetColors(this);
+        Load(utility, migrator);
     }
 
-    public void Load(CharacterUtility utility, FilenameService fileNames, ConfigMigrationService migrator)
+    public void Load(CharacterUtility utility, ConfigMigrationService migrator)
     {
         static void HandleDeserializationError(object? sender, ErrorEventArgs errorArgs)
         {
@@ -121,21 +126,28 @@ public class Configuration : IPluginConfiguration, ISavable
             errorArgs.ErrorContext.Handled = true;
         }
 
-        if (File.Exists(fileNames.ConfigFile))
-        {
-            var text = File.ReadAllText(fileNames.ConfigFile);
-            JsonConvert.PopulateObject(text, this, new JsonSerializerSettings
+        if (File.Exists(_saveService.FileNames.ConfigFile))
+            try
             {
-                Error = HandleDeserializationError,
-            });
-        }
+                var text = File.ReadAllText(_saveService.FileNames.ConfigFile);
+                JsonConvert.PopulateObject(text, this, new JsonSerializerSettings
+                {
+                    Error = HandleDeserializationError,
+                });
+            }
+            catch (Exception ex)
+            {
+                Penumbra.Chat.NotificationMessage(ex,
+                    "Error reading Configuration, reverting to default.\nYou may be able to restore your configuration using the rolling backups in the XIVLauncher/backups/Penumbra directory.",
+                    "Error reading Configuration", "Error", NotificationType.Error);
+            }
 
         migrator.Migrate(utility, this);
     }
 
     /// <summary> Save the current configuration. </summary>
     public void Save()
-        => _saveService.QueueSave(this);
+        => _saveService.DelaySave(this);
 
     /// <summary> Contains some default values or boundaries for config values. </summary>
     public static class Constants

@@ -1,10 +1,7 @@
 using OtterGui.Classes;
 using Penumbra.GameData.Enums;
 using Penumbra.Mods;
-using System;
-using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
-using System.Linq;
 using Penumbra.Interop.Structs;
 using Penumbra.Meta.Files;
 using Penumbra.Meta.Manipulations;
@@ -40,7 +37,7 @@ public partial class ModCollection
     public IEnumerable<Utf8GamePath> ReverseResolvePath(FullPath path)
         => _cache?.ReverseResolvePath(path) ?? Array.Empty<Utf8GamePath>();
 
-    public HashSet<Utf8GamePath>[] ReverseResolvePaths(string[] paths)
+    public HashSet<Utf8GamePath>[] ReverseResolvePaths(IReadOnlyCollection<string> paths)
         => _cache?.ReverseResolvePaths(paths) ?? paths.Select(_ => new HashSet<Utf8GamePath>()).ToArray();
 
     public FullPath? ResolvePath(Utf8GamePath path)
@@ -95,7 +92,7 @@ public partial class ModCollection
     // Used for short periods of changed files.
     public MetaList.MetaReverter TemporarilySetEqdpFile(CharacterUtility utility, GenderRace genderRace, bool accessory)
         => _cache?.Meta.TemporarilySetEqdpFile(genderRace, accessory)
-         ?? utility.TemporarilyResetResource(Interop.Structs.CharacterUtilityData.EqdpIdx(genderRace, accessory));
+         ?? utility.TemporarilyResetResource(CharacterUtilityData.EqdpIdx(genderRace, accessory));
 
     public MetaList.MetaReverter TemporarilySetEqpFile(CharacterUtility utility)
         => _cache?.Meta.TemporarilySetEqpFile()

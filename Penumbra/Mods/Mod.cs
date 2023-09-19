@@ -1,17 +1,11 @@
-using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
 using OtterGui;
 using OtterGui.Classes;
-using Penumbra.Collections.Cache;
-using Penumbra.Import;
-using Penumbra.Meta;
+using Penumbra.Mods.Subclasses;
 using Penumbra.String.Classes;
 
 namespace Penumbra.Mods;
 
-public sealed partial class Mod : IMod
+public sealed class Mod : IMod
 {
     public static readonly TemporaryMod ForcedFiles = new()
     {

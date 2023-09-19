@@ -1,8 +1,7 @@
-using System;
-using System.IO;
+using OtterGui.Classes;
+using Penumbra.Api;
 using Penumbra.Mods;
 using Penumbra.Mods.Manager;
-using Penumbra.Util;
 
 namespace Penumbra.Communication;
 
@@ -22,7 +21,7 @@ public sealed class ModPathChanged : EventWrapper<Action<ModPathChangeType, Mod,
         /// <seealso cref="Collections.Cache.CollectionCacheManager.OnModChangeAddition"/>
         CollectionCacheManagerAddition = -100,
 
-        /// <seealso cref="Api.PenumbraApi.ModPathChangeSubscriber"/>
+        /// <seealso cref="PenumbraApi.ModPathChangeSubscriber"/>
         Api = 0,
 
         /// <seealso cref="Mods.Manager.ModCacheManager.OnModPathChange"/>
@@ -31,7 +30,7 @@ public sealed class ModPathChanged : EventWrapper<Action<ModPathChangeType, Mod,
         /// <seealso cref="Mods.Manager.ModExportManager.OnModPathChange"/>
         ModExportManager = 0,
 
-        /// <seealso cref="Mods.ModFileSystem.OnModPathChange"/>
+        /// <seealso cref="Mods.Manager.ModFileSystem.OnModPathChange"/>
         ModFileSystem = 0,
 
         /// <seealso cref="Mods.Manager.ModManager.OnModPathChange"/>
@@ -40,12 +39,16 @@ public sealed class ModPathChanged : EventWrapper<Action<ModPathChangeType, Mod,
         /// <seealso cref="Mods.Editor.ModMerger.OnModPathChange"/>
         ModMerger = 0,
 
+        /// <seealso cref="UI.AdvancedWindow.ModEditWindow.OnModPathChange"/>
+        ModEditWindow = 0,
+
         /// <seealso cref="Collections.Manager.CollectionStorage.OnModPathChange"/>
         CollectionStorage = 10,
 
         /// <seealso cref="Collections.Cache.CollectionCacheManager.OnModChangeRemoval"/>
         CollectionCacheManagerRemoval = 100,
     }
+
     public ModPathChanged()
         : base(nameof(ModPathChanged))
     { }

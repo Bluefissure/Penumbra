@@ -1,13 +1,10 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Numerics;
 using Dalamud.Interface;
 using ImGuiNET;
 using OtterGui;
 using OtterGui.Classes;
 using OtterGui.Raii;
 using Penumbra.Mods;
+using Penumbra.Mods.Subclasses;
 using Penumbra.String.Classes;
 using Penumbra.UI.Classes;
 
@@ -287,14 +284,20 @@ public partial class ModEditWindow
 
 
         ImGui.SameLine();
-        if (ImGui.Button("Delete Selected Files"))
+        var active = _config.DeleteModModifier.IsActive();
+        var tt =
+            "Delete all selected files entirely from your filesystem, but not their file associations in the mod.\n!!!This can not be reverted!!!";
+        if (_selectedFiles.Count == 0)
+            tt += "\n\nNo files selected.";
+        else if (!active)
+            tt += $"\n\nHold {_config.DeleteModModifier} to delete.";
+
+        if (ImGuiUtil.DrawDisabledButton("Delete Selected Files", Vector2.Zero, tt, _selectedFiles.Count == 0 || !active))
             _editor.FileEditor.DeleteFiles(_editor.Mod!, _editor.Option!, _editor.Files.Available.Where(_selectedFiles.Contains));
 
-        ImGuiUtil.HoverTooltip(
-            "Delete all selected files entirely from your filesystem, but not their file associations in the mod, if there are any.\n!!!This can not be reverted!!!");
         ImGui.SameLine();
         var changes = _editor.FileEditor.Changes;
-        var tt      = changes ? "Apply the current file setup to the currently selected option." : "No changes made.";
+        tt = changes ? "Apply the current file setup to the currently selected option." : "No changes made.";
         if (ImGuiUtil.DrawDisabledButton("Apply Changes", Vector2.Zero, tt, !changes))
         {
             var failedFiles = _editor.FileEditor.Apply(_editor.Mod!, (SubMod)_editor.Option!);

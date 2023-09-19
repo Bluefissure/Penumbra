@@ -1,9 +1,5 @@
-using System;
-using System.Collections.Concurrent;
-using System.IO;
-using System.Linq;
-using System.Threading.Tasks;
 using Penumbra.Communication;
+using Penumbra.Mods.Editor;
 using Penumbra.Services;
 
 namespace Penumbra.Mods.Manager;
@@ -49,7 +45,7 @@ public sealed class ModManager : ModStorage, IDisposable
         _communicator = communicator;
         DataEditor    = dataEditor;
         OptionEditor  = optionEditor;
-        Creator    = creator;
+        Creator       = creator;
         SetBaseDirectory(config.ModDirectory, true);
         _communicator.ModPathChanged.Subscribe(OnModPathChange, ModPathChanged.Priority.ModManager);
         DiscoverMods();
@@ -76,7 +72,7 @@ public sealed class ModManager : ModStorage, IDisposable
             ScanMods();
 
         _communicator.ModDiscoveryFinished.Invoke();
-        Penumbra.Log.Information("Rediscovered mods.");
+        Penumbra.Log.Information($"Rediscovered {Mods.Count} mods.");
 
         if (ModBackup.MigrateModBackups)
             ModBackup.MigrateZipToPmp(this);
@@ -245,7 +241,7 @@ public sealed class ModManager : ModStorage, IDisposable
     {
         switch (type)
         {
-            case ModPathChangeType.Added: 
+            case ModPathChangeType.Added:
                 SetNew(mod);
                 break;
             case ModPathChangeType.Deleted:
@@ -317,7 +313,7 @@ public sealed class ModManager : ModStorage, IDisposable
     {
         var options = new ParallelOptions()
         {
-            MaxDegreeOfParallelism = Environment.ProcessorCount / 2,
+            MaxDegreeOfParallelism = Math.Max(1, Environment.ProcessorCount / 2),
         };
         var queue = new ConcurrentQueue<Mod>();
         Parallel.ForEach(BasePath.EnumerateDirectories(), options, dir =>

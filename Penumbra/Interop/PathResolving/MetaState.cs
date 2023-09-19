@@ -1,11 +1,11 @@
-using System;
-using System.Linq;
-using System.Threading;
 using Dalamud.Hooking;
 using Dalamud.Utility.Signatures;
+using FFXIVClientStructs.FFXIV.Client.Game.Character;
+using FFXIVClientStructs.FFXIV.Client.Game.Object;
 using FFXIVClientStructs.FFXIV.Client.Graphics.Scene;
 using OtterGui.Classes;
 using Penumbra.Collections;
+using Penumbra.Api.Enums;
 using Penumbra.GameData;
 using Penumbra.GameData.Enums;
 using Penumbra.Interop.ResourceLoading;
@@ -14,6 +14,7 @@ using Penumbra.Services;
 using Penumbra.String.Classes;
 using Penumbra.Util;
 using ObjectType = FFXIVClientStructs.FFXIV.Client.Graphics.Scene.ObjectType;
+using CharacterUtility = Penumbra.Interop.Services.CharacterUtility;
 using static Penumbra.GameData.Enums.GenderRace;
 
 namespace Penumbra.Interop.PathResolving;
@@ -37,7 +38,7 @@ namespace Penumbra.Interop.PathResolving;
 // RSP tail entries seem to be obtained by "E8 ?? ?? ?? ?? 0F 28 F0 48 8B 05"
 // RSP bust size entries seem to be obtained by  "E8 ?? ?? ?? ?? F2 0F 10 44 24 ?? 8B 44 24 ?? F2 0F 11 45 ?? 89 45 ?? 83 FF"
 // they all are called by many functions, but the most relevant seem to be Human.SetupFromCharacterData, which is only called by CharacterBase.Create,
-// ChangeCustomize and RspSetupCharacter, which is hooked here.
+// ChangeCustomize and RspSetupCharacter, which is hooked here, as well as Character.CalculateHeight.
 
 // GMP Entries seem to be only used by "48 8B ?? 53 55 57 48 83 ?? ?? 48 8B", which has a DrawObject as its first parameter.
 public unsafe class MetaState : IDisposable
@@ -49,15 +50,16 @@ public unsafe class MetaState : IDisposable
     private readonly CommunicatorService _communicator;
     private readonly PerformanceTracker  _performance;
     private readonly CollectionResolver  _collectionResolver;
-    private readonly ResourceService     _resources;
+    private readonly ResourceLoader      _resources;
     private readonly GameEventManager    _gameEventManager;
     private readonly CharacterUtility    _characterUtility;
 
     private ResolveData         _lastCreatedCollection          = ResolveData.Invalid;
+    private ResolveData         _customizeChangeCollection      = ResolveData.Invalid;
     private DisposableContainer _characterBaseCreateMetaChanges = DisposableContainer.Empty;
 
     public MetaState(PerformanceTracker performance, CommunicatorService communicator, CollectionResolver collectionResolver,
-        ResourceService resources, GameEventManager gameEventManager, CharacterUtility characterUtility, Configuration config)
+        ResourceLoader resources, GameEventManager gameEventManager, CharacterUtility characterUtility, Configuration config)
     {
         _performance        = performance;
         _communicator       = communicator;
@@ -74,6 +76,7 @@ public unsafe class MetaState : IDisposable
         _setupVisorHook.Enable();
         _rspSetupCharacterHook.Enable();
         _changeCustomize.Enable();
+        _calculateHeightHook.Enable();
         _gameEventManager.CreatingCharacterBase += OnCreatingCharacterBase;
         _gameEventManager.CharacterBaseCreated  += OnCharacterBaseCreated;
     }
@@ -81,10 +84,10 @@ public unsafe class MetaState : IDisposable
     public bool HandleDecalFile(ResourceType type, Utf8GamePath gamePath, out ResolveData resolveData)
     {
         if (type == ResourceType.Tex
-         && _lastCreatedCollection.Valid
+         && (_lastCreatedCollection.Valid || _customizeChangeCollection.Valid)
          && gamePath.Path.Substring("chara/common/texture/".Length).StartsWith("decal"u8))
         {
-            resolveData = _lastCreatedCollection;
+            resolveData = _lastCreatedCollection.Valid ? _lastCreatedCollection : _customizeChangeCollection;
             return true;
         }
 
@@ -118,19 +121,21 @@ public unsafe class MetaState : IDisposable
         _setupVisorHook.Dispose();
         _rspSetupCharacterHook.Dispose();
         _changeCustomize.Dispose();
+        _calculateHeightHook.Dispose();
         _gameEventManager.CreatingCharacterBase -= OnCreatingCharacterBase;
         _gameEventManager.CharacterBaseCreated  -= OnCharacterBaseCreated;
     }
 
-    private void OnCreatingCharacterBase(uint modelCharaId, nint customize, nint equipData)
+    private void OnCreatingCharacterBase(nint modelCharaId, nint customize, nint equipData)
     {
         _lastCreatedCollection = _collectionResolver.IdentifyLastGameObjectCollection(true);
         if (_lastCreatedCollection.Valid && _lastCreatedCollection.AssociatedGameObject != nint.Zero)
             _communicator.CreatingCharacterBase.Invoke(_lastCreatedCollection.AssociatedGameObject,
-                _lastCreatedCollection.ModCollection.Name, (nint)(&modelCharaId), customize, equipData);
+                _lastCreatedCollection.ModCollection.Name, modelCharaId, customize, equipData);
 
-        var decal = new DecalReverter(_config, _characterUtility, _resources, _lastCreatedCollection.ModCollection, UsesDecal(modelCharaId, equipData));
-        var cmp   = _lastCreatedCollection.ModCollection.TemporarilySetCmpFile(_characterUtility);
+        var decal = new DecalReverter(_config, _characterUtility, _resources, _lastCreatedCollection,
+            UsesDecal(*(uint*)modelCharaId, customize));
+        var cmp = _lastCreatedCollection.ModCollection.TemporarilySetCmpFile(_characterUtility);
         _characterBaseCreateMetaChanges.Dispose(); // Should always be empty.
         _characterBaseCreateMetaChanges = new DisposableContainer(decal, cmp);
     }
@@ -139,9 +144,9 @@ public unsafe class MetaState : IDisposable
     {
         _characterBaseCreateMetaChanges.Dispose();
         _characterBaseCreateMetaChanges = DisposableContainer.Empty;
-        if (_lastCreatedCollection.Valid && _lastCreatedCollection.AssociatedGameObject != nint.Zero)
+        if (_lastCreatedCollection.Valid && _lastCreatedCollection.AssociatedGameObject != nint.Zero && drawObject != nint.Zero)
             _communicator.CreatedCharacterBase.Invoke(_lastCreatedCollection.AssociatedGameObject,
-                _lastCreatedCollection.ModCollection.Name, drawObject);
+                _lastCreatedCollection.ModCollection, drawObject);
         _lastCreatedCollection = ResolveData.Invalid;
     }
 
@@ -228,7 +233,7 @@ public unsafe class MetaState : IDisposable
 
     private void RspSetupCharacterDetour(nint drawObject, nint unk2, float unk3, nint unk4, byte unk5)
     {
-        if (_inChangeCustomize)
+        if (_customizeChangeCollection.Valid)
         {
             _rspSetupCharacterHook.Original(drawObject, unk2, unk3, unk4, unk5);
         }
@@ -241,8 +246,18 @@ public unsafe class MetaState : IDisposable
         }
     }
 
-    /// <summary> ChangeCustomize calls RspSetupCharacter, so skip the additional cmp change. </summary>
-    private bool _inChangeCustomize;
+    private delegate ulong CalculateHeightDelegate(Character* character);
+
+    // TODO: use client structs
+    [Signature(Sigs.CalculateHeight, DetourName = nameof(CalculateHeightDetour))]
+    private readonly Hook<CalculateHeightDelegate> _calculateHeightHook = null!;
+
+    private ulong CalculateHeightDetour(Character* character)
+    {
+        var       resolveData = _collectionResolver.IdentifyCollection((GameObject*)character, true);
+        using var cmp         = resolveData.ModCollection.TemporarilySetCmpFile(_characterUtility);
+        return _calculateHeightHook.Original(character);
+    }
 
     private delegate bool ChangeCustomizeDelegate(nint human, nint data, byte skipEquipment);
 
@@ -252,13 +267,12 @@ public unsafe class MetaState : IDisposable
     private bool ChangeCustomizeDetour(nint human, nint data, byte skipEquipment)
     {
         using var performance = _performance.Measure(PerformanceType.ChangeCustomize);
-        _inChangeCustomize = true;
-        var       resolveData = _collectionResolver.IdentifyCollection((DrawObject*)human, true);
-        using var cmp         = resolveData.ModCollection.TemporarilySetCmpFile(_characterUtility);
-        using var decals =
-            new DecalReverter(_config, _characterUtility, _resources, resolveData.ModCollection, UsesDecal(0, data));
-        var ret = _changeCustomize.Original(human, data, skipEquipment);
-        _inChangeCustomize = false;
+        _customizeChangeCollection = _collectionResolver.IdentifyCollection((DrawObject*)human, true);
+        using var cmp    = _customizeChangeCollection.ModCollection.TemporarilySetCmpFile(_characterUtility);
+        using var decals = new DecalReverter(_config, _characterUtility, _resources, _customizeChangeCollection, true);
+        using var decal2 = new DecalReverter(_config, _characterUtility, _resources, _customizeChangeCollection, false);
+        var       ret    = _changeCustomize.Original(human, data, skipEquipment);
+        _customizeChangeCollection = ResolveData.Invalid;
         return ret;
     }
 

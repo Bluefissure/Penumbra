@@ -1,7 +1,3 @@
-using System;
-using System.Runtime.InteropServices;
-using System.Threading;
-using System.Threading.Tasks;
 using Dalamud.Hooking;
 using Dalamud.Utility.Signatures;
 using Penumbra.GameData;
@@ -85,6 +81,6 @@ public unsafe class FileReadService : IDisposable
     /// </summary>
     private nint GetResourceManager()
         => !_lastFileThreadResourceManager.IsValueCreated || _lastFileThreadResourceManager.Value == IntPtr.Zero
-            ? (nint) _resourceManager.ResourceManager
+            ? (nint)_resourceManager.ResourceManager
             : _lastFileThreadResourceManager.Value;
 }

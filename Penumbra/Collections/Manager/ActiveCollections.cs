@@ -1,7 +1,3 @@
-using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
 using Dalamud.Interface.Internal.Notifications;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
@@ -170,7 +166,7 @@ public class ActiveCollections : ISavable, IDisposable
     public void MoveIndividualCollection(int from, int to)
     {
         if (Individuals.Move(from, to))
-            _saveService.QueueSave(this);
+            _saveService.DelaySave(this);
     }
 
     /// <summary> Set and create an active collection, can be used to set Default, Current, Interface, Special, or Individual collections. </summary>
@@ -318,7 +314,7 @@ public class ActiveCollections : ISavable, IDisposable
         }
         else if (collectionType is not CollectionType.Temporary)
         {
-            _saveService.QueueSave(this);
+            _saveService.DelaySave(this);
         }
     }
 
@@ -335,7 +331,7 @@ public class ActiveCollections : ISavable, IDisposable
          ?? (configChanged ? ModCollection.DefaultCollectionName : ModCollection.Empty.Name);
         if (!_storage.ByName(defaultName, out var defaultCollection))
         {
-            Penumbra.ChatService.NotificationMessage(
+            Penumbra.Chat.NotificationMessage(
                 $"Last choice of {TutorialService.DefaultCollection} {defaultName} is not available, reset to {ModCollection.Empty.Name}.",
                 "Load Failure",
                 NotificationType.Warning);
@@ -351,7 +347,7 @@ public class ActiveCollections : ISavable, IDisposable
         var interfaceName = jObject[nameof(Interface)]?.ToObject<string>() ?? Default.Name;
         if (!_storage.ByName(interfaceName, out var interfaceCollection))
         {
-            Penumbra.ChatService.NotificationMessage(
+            Penumbra.Chat.NotificationMessage(
                 $"Last choice of {TutorialService.InterfaceCollection} {interfaceName} is not available, reset to {ModCollection.Empty.Name}.",
                 "Load Failure", NotificationType.Warning);
             Interface     = ModCollection.Empty;
@@ -366,7 +362,7 @@ public class ActiveCollections : ISavable, IDisposable
         var currentName = jObject[nameof(Current)]?.ToObject<string>() ?? Default.Name;
         if (!_storage.ByName(currentName, out var currentCollection))
         {
-            Penumbra.ChatService.NotificationMessage(
+            Penumbra.Chat.NotificationMessage(
                 $"Last choice of {TutorialService.SelectedCollection} {currentName} is not available, reset to {ModCollection.DefaultCollectionName}.",
                 "Load Failure", NotificationType.Warning);
             Current       = _storage.DefaultNamed;
@@ -385,7 +381,7 @@ public class ActiveCollections : ISavable, IDisposable
             {
                 if (!_storage.ByName(typeName, out var typeCollection))
                 {
-                    Penumbra.ChatService.NotificationMessage($"Last choice of {name} Collection {typeName} is not available, removed.",
+                    Penumbra.Chat.NotificationMessage($"Last choice of {name} Collection {typeName} is not available, removed.",
                         "Load Failure",
                         NotificationType.Warning);
                     configChanged = true;
@@ -446,6 +442,7 @@ public class ActiveCollections : ISavable, IDisposable
                     var m = ByType(CollectionTypeExtensions.FromParts(race, Gender.Male, false));
                     if (m != null && m != yourself)
                         return string.Empty;
+
                     var f = ByType(CollectionTypeExtensions.FromParts(race, Gender.Female, false));
                     if (f != null && f != yourself)
                         return string.Empty;
@@ -454,26 +451,28 @@ public class ActiveCollections : ISavable, IDisposable
                 }
 
                 var racialString = racial ? " and Racial Assignments" : string.Empty;
-                var @base  = ByType(CollectionType.Default);
-                var male   = ByType(CollectionType.MalePlayerCharacter);
-                var female = ByType(CollectionType.FemalePlayerCharacter);
+                var @base        = ByType(CollectionType.Default);
+                var male         = ByType(CollectionType.MalePlayerCharacter);
+                var female       = ByType(CollectionType.FemalePlayerCharacter);
                 if (male == yourself && female == yourself)
                     return
                         $"Assignment is redundant due to overwriting Male Players and Female Players{racialString} with an identical collection.\nYou can remove it.";
-                
+
                 if (male == null)
                 {
                     if (female == null && @base == yourself)
-                        return $"Assignment is redundant due to overwriting Base{racialString} with an identical collection.\nYou can remove it.";
+                        return
+                            $"Assignment is redundant due to overwriting Base{racialString} with an identical collection.\nYou can remove it.";
                     if (female == yourself && @base == yourself)
                         return
                             $"Assignment is redundant due to overwriting Base and Female Players{racialString} with an identical collection.\nYou can remove it.";
                 }
                 else if (male == yourself && female == null && @base == yourself)
                 {
-                    return $"Assignment is redundant due to overwriting Base and Male Players{racialString} with an identical collection.\nYou can remove it.";
+                    return
+                        $"Assignment is redundant due to overwriting Base and Male Players{racialString} with an identical collection.\nYou can remove it.";
                 }
-                
+
                 break;
             // Check individual assignments. We can only be sure of redundancy for world-overlap or ownership overlap.
             case CollectionType.Individual:

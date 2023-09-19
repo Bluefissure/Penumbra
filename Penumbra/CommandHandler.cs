@@ -1,10 +1,8 @@
-using System;
-using System.Linq;
-using System.Runtime.CompilerServices;
 using Dalamud.Game;
 using Dalamud.Game.Command;
 using Dalamud.Game.Gui;
 using Dalamud.Game.Text.SeStringHandling;
+using Dalamud.Plugin.Services;
 using ImGuiNET;
 using OtterGui.Classes;
 using Penumbra.Api.Enums;
@@ -16,7 +14,6 @@ using Penumbra.Mods;
 using Penumbra.Mods.Manager;
 using Penumbra.Services;
 using Penumbra.UI;
-using Penumbra.Util;
 
 namespace Penumbra;
 
@@ -24,7 +21,7 @@ public class CommandHandler : IDisposable
 {
     private const string CommandName = "/penumbra";
 
-    private readonly CommandManager    _commandManager;
+    private readonly ICommandManager   _commandManager;
     private readonly RedrawService     _redrawService;
     private readonly ChatGui           _chat;
     private readonly Configuration     _config;
@@ -35,7 +32,7 @@ public class CommandHandler : IDisposable
     private readonly Penumbra          _penumbra;
     private readonly CollectionEditor  _collectionEditor;
 
-    public CommandHandler(Framework framework, CommandManager commandManager, ChatGui chat, RedrawService redrawService, Configuration config,
+    public CommandHandler(Framework framework, ICommandManager commandManager, ChatGui chat, RedrawService redrawService, Configuration config,
         ConfigWindow configWindow, ModManager modManager, CollectionManager collectionManager, ActorService actors, Penumbra penumbra,
         CollectionEditor collectionEditor)
     {
@@ -51,11 +48,13 @@ public class CommandHandler : IDisposable
         _collectionEditor  = collectionEditor;
         framework.RunOnFrameworkThread(() =>
         {
+            _commandManager.RemoveHandler(CommandName);
             _commandManager.AddHandler(CommandName, new CommandInfo(OnCommand)
             {
                 HelpMessage = "Without arguments, toggles the main window. Use /penumbra help to get further command help.",
                 ShowInHelp  = true,
             });
+            Penumbra.Log.Information($"Registered {CommandName} with Dalamud.");
         });
     }
 
@@ -90,7 +89,7 @@ public class CommandHandler : IDisposable
 
     private bool PrintHelp(string arguments)
     {
-        if (!string.Equals(arguments, "help", StringComparison.OrdinalIgnoreCase) && arguments == "?")
+        if (!string.Equals(arguments, "help", StringComparison.OrdinalIgnoreCase) && arguments != "?")
             _chat.Print(new SeStringBuilder().AddText("The given argument ").AddRed(arguments, true)
                 .AddText(" is not valid. Valid arguments are:").BuiltString);
         else
@@ -209,6 +208,7 @@ public class CommandHandler : IDisposable
     {
         if (_config.MinimumSize.X == Configuration.Constants.MinimumSizeX && _config.MinimumSize.Y == Configuration.Constants.MinimumSizeY)
             return false;
+
         _config.MinimumSize.X = Configuration.Constants.MinimumSizeX;
         _config.MinimumSize.Y = Configuration.Constants.MinimumSizeY;
         _config.Save();

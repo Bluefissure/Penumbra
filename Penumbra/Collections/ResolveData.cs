@@ -1,5 +1,3 @@
-using System;
-
 namespace Penumbra.Collections;
 
 public readonly struct ResolveData
@@ -17,7 +15,7 @@ public readonly struct ResolveData
         => _modCollection != null;
 
     public ResolveData()
-     : this(null!, nint.Zero)
+        : this(null!, nint.Zero)
     { }
 
     public ResolveData(ModCollection collection, nint gameObject)

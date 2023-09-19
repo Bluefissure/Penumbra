@@ -1,14 +1,10 @@
-using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
-using System.Numerics;
-using Dalamud.Data;
 using Dalamud.Interface;
 using Dalamud.Interface.Internal.Notifications;
+using Dalamud.Plugin.Services;
 using ImGuiNET;
 using OtterGui;
 using OtterGui.Classes;
+using OtterGui.Compression;
 using OtterGui.Raii;
 using OtterGui.Widgets;
 using Penumbra.GameData.Files;
@@ -18,15 +14,16 @@ using Penumbra.UI.Classes;
 
 namespace Penumbra.UI.AdvancedWindow;
 
-public class FileEditor<T> where T : class, IWritable
+public class FileEditor<T> : IDisposable where T : class, IWritable
 {
     private readonly FileDialogService _fileDialog;
-    private readonly DataManager       _gameData;
+    private readonly IDataManager      _gameData;
     private readonly ModEditWindow     _owner;
+    private readonly FileCompactor     _compactor;
 
-    public FileEditor(ModEditWindow owner, DataManager gameData, Configuration config, FileDialogService fileDialog, string tabName,
-        string fileType, Func<IReadOnlyList<FileRegistry>> getFiles, Func<T, bool, bool> drawEdit, Func<string> getInitialPath,
-        Func<byte[], T?> parseFile)
+    public FileEditor(ModEditWindow owner, IDataManager gameData, Configuration config, FileCompactor compactor, FileDialogService fileDialog,
+        string tabName, string fileType, Func<IReadOnlyList<FileRegistry>> getFiles, Func<T, bool, bool> drawEdit, Func<string> getInitialPath,
+        Func<byte[], string, bool, T?> parseFile)
     {
         _owner          = owner;
         _gameData       = gameData;
@@ -36,6 +33,7 @@ public class FileEditor<T> where T : class, IWritable
         _drawEdit       = drawEdit;
         _getInitialPath = getInitialPath;
         _parseFile      = parseFile;
+        _compactor      = compactor;
         _combo          = new Combo(config, getFiles);
     }
 
@@ -60,11 +58,19 @@ public class FileEditor<T> where T : class, IWritable
         DrawFilePanel();
     }
 
-    private readonly string              _tabName;
-    private readonly string              _fileType;
-    private readonly Func<T, bool, bool> _drawEdit;
-    private readonly Func<string>        _getInitialPath;
-    private readonly Func<byte[], T?>    _parseFile;
+    public void Dispose()
+    {
+        (_currentFile as IDisposable)?.Dispose();
+        _currentFile = null;
+        (_defaultFile as IDisposable)?.Dispose();
+        _defaultFile = null;
+    }
+
+    private readonly string                         _tabName;
+    private readonly string                         _fileType;
+    private readonly Func<T, bool, bool>            _drawEdit;
+    private readonly Func<string>                   _getInitialPath;
+    private readonly Func<byte[], string, bool, T?> _parseFile;
 
     private FileRegistry? _currentPath;
     private T?            _currentFile;
@@ -99,7 +105,9 @@ public class FileEditor<T> where T : class, IWritable
                 if (file != null)
                 {
                     _defaultException = null;
-                    _defaultFile      = _parseFile(file.Data);
+                    (_defaultFile as IDisposable)?.Dispose();
+                    _defaultFile = null; // Avoid double disposal if an exception occurs during the parsing of the new file.
+                    _defaultFile = _parseFile(file.Data, _defaultPath, false);
                 }
                 else
                 {
@@ -125,11 +133,11 @@ public class FileEditor<T> where T : class, IWritable
 
                     try
                     {
-                        File.WriteAllBytes(name, _defaultFile?.Write() ?? throw new Exception("File invalid."));
+                        _compactor.WriteAllBytes(name, _defaultFile?.Write() ?? throw new Exception("File invalid."));
                     }
                     catch (Exception e)
                     {
-                        Penumbra.ChatService.NotificationMessage($"Could not export {_defaultPath}:\n{e}", "Error", NotificationType.Error);
+                        Penumbra.Chat.NotificationMessage($"Could not export {_defaultPath}:\n{e}", "Error", NotificationType.Error);
                     }
                 }, _getInitialPath(), false);
 
@@ -158,8 +166,9 @@ public class FileEditor<T> where T : class, IWritable
     {
         _currentException = null;
         _currentPath      = null;
-        _currentFile      = null;
-        _changed          = false;
+        (_currentFile as IDisposable)?.Dispose();
+        _currentFile = null;
+        _changed     = false;
     }
 
     private void DrawFileSelectCombo()
@@ -181,10 +190,13 @@ public class FileEditor<T> where T : class, IWritable
         try
         {
             var bytes = File.ReadAllBytes(_currentPath.File.FullName);
-            _currentFile = _parseFile(bytes);
+            (_currentFile as IDisposable)?.Dispose();
+            _currentFile = null; // Avoid double disposal if an exception occurs during the parsing of the new file.
+            _currentFile = _parseFile(bytes, _currentPath.File.FullName, true);
         }
         catch (Exception e)
         {
+            (_currentFile as IDisposable)?.Dispose();
             _currentFile      = null;
             _currentException = e;
         }
@@ -195,7 +207,7 @@ public class FileEditor<T> where T : class, IWritable
         if (ImGuiUtil.DrawDisabledButton("Save to File", Vector2.Zero,
                 $"Save the selected {_fileType} file with all changes applied. This is not revertible.", !_changed))
         {
-            File.WriteAllBytes(_currentPath!.File.FullName, _currentFile!.Write());
+            _compactor.WriteAllBytes(_currentPath!.File.FullName, _currentFile!.Write());
             _changed = false;
         }
     }

@@ -1,6 +1,3 @@
-using System;
-using System.IO;
-using System.Linq;
 using Dalamud.Utility;
 using Newtonsoft.Json.Linq;
 using OtterGui.Classes;
@@ -183,7 +180,7 @@ public class ModDataEditor
         }
         catch (Exception e)
         {
-            Penumbra.Log.Error($"Could not load mod meta:\n{e}");
+            Penumbra.Log.Error($"Could not load mod meta for {metaFile}:\n{e}");
             return ModDataChangeType.Deletion;
         }
     }
@@ -266,7 +263,6 @@ public class ModDataEditor
         ;
         _communicatorService.ModDataChanged.Invoke(ModDataChangeType.Favorite, mod, null);
     }
-
 
     private void ChangeTag(Mod mod, int tagIdx, string newTag, bool local)
     {

@@ -1,12 +1,10 @@
-using System;
 using Dalamud.Interface;
 using Dalamud.Interface.Windowing;
 using Dalamud.Plugin;
-using Penumbra.UI;
 using Penumbra.UI.AdvancedWindow;
 using Penumbra.UI.Tabs;
 
-namespace Penumbra;
+namespace Penumbra.UI;
 
 public class PenumbraWindowSystem : IDisposable
 {

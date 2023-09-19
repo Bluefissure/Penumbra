@@ -1,11 +1,7 @@
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using Penumbra.Mods.Manager;
 using Penumbra.Services;
-using Penumbra.Util;
 
 namespace Penumbra.Mods;
 

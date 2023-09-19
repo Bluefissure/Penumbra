@@ -1,23 +1,17 @@
 using ImGuiNET;
 using OtterGui;
 using OtterGui.Raii;
-using Penumbra.Collections;
 using Penumbra.UI.Classes;
-using System;
-using System.Linq;
-using System.Numerics;
-using Dalamud.Game.ClientState;
 using Dalamud.Interface;
+using Dalamud.Plugin.Services;
 using OtterGui.Widgets;
 using Penumbra.Api.Enums;
 using Penumbra.Interop.Services;
 using Penumbra.Mods;
 using Penumbra.Mods.Manager;
-using Penumbra.Services;
 using Penumbra.UI.ModsTab;
 using ModFileSystemSelector = Penumbra.UI.ModsTab.ModFileSystemSelector;
 using Penumbra.Collections.Manager;
-using Penumbra.UI.CollectionTab;
 
 namespace Penumbra.UI.Tabs;
 
@@ -30,11 +24,11 @@ public class ModsTab : ITab
     private readonly ActiveCollections      _activeCollections;
     private readonly RedrawService          _redrawService;
     private readonly Configuration          _config;
-    private readonly ClientState            _clientState;
+    private readonly IClientState           _clientState;
     private readonly CollectionSelectHeader _collectionHeader;
 
     public ModsTab(ModManager modManager, CollectionManager collectionManager, ModFileSystemSelector selector, ModPanel panel,
-        TutorialService tutorial, RedrawService redrawService, Configuration config, ClientState clientState,
+        TutorialService tutorial, RedrawService redrawService, Configuration config, IClientState clientState,
         CollectionSelectHeader collectionHeader)
     {
         _modManager        = modManager;

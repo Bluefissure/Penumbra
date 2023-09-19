@@ -1,9 +1,7 @@
-using System;
-using System.Linq;
-using System.Runtime.CompilerServices;
-using Dalamud.Data;
+using Dalamud.Plugin.Services;
 using Dalamud.Utility.Signatures;
 using FFXIVClientStructs.FFXIV.Client.System.Memory;
+using OtterGui.Compression;
 using Penumbra.Collections;
 using Penumbra.Collections.Manager;
 using Penumbra.GameData;
@@ -12,6 +10,7 @@ using Penumbra.Interop.Services;
 using Penumbra.Interop.Structs;
 using Penumbra.Meta.Files;
 using Penumbra.Mods;
+using Penumbra.Mods.Subclasses;
 using Penumbra.Services;
 using ResidentResourceManager = Penumbra.Interop.Services.ResidentResourceManager;
 
@@ -22,13 +21,15 @@ public unsafe class MetaFileManager
     internal readonly Configuration           Config;
     internal readonly CharacterUtility        CharacterUtility;
     internal readonly ResidentResourceManager ResidentResources;
-    internal readonly DataManager             GameData;
+    internal readonly IDataManager            GameData;
     internal readonly ActiveCollectionData    ActiveCollections;
     internal readonly ValidityChecker         ValidityChecker;
     internal readonly IdentifierService       Identifier;
+    internal readonly FileCompactor           Compactor;
 
-    public MetaFileManager(CharacterUtility characterUtility, ResidentResourceManager residentResources, DataManager gameData,
-        ActiveCollectionData activeCollections, Configuration config, ValidityChecker validityChecker, IdentifierService identifier)
+    public MetaFileManager(CharacterUtility characterUtility, ResidentResourceManager residentResources, IDataManager gameData,
+        ActiveCollectionData activeCollections, Configuration config, ValidityChecker validityChecker, IdentifierService identifier,
+        FileCompactor compactor)
     {
         CharacterUtility  = characterUtility;
         ResidentResources = residentResources;
@@ -37,6 +38,7 @@ public unsafe class MetaFileManager
         Config            = config;
         ValidityChecker   = validityChecker;
         Identifier        = identifier;
+        Compactor         = compactor;
         SignatureHelper.Initialise(this);
     }
 
@@ -84,13 +86,16 @@ public unsafe class MetaFileManager
                 : CharacterUtility.TemporarilySetResource(metaIndex, (nint)file.Data, file.Length)
             : MetaList.MetaReverter.Disabled;
 
-    public void ApplyDefaultFiles(ModCollection collection)
+    public void ApplyDefaultFiles(ModCollection? collection)
     {
         if (ActiveCollections.Default != collection || !CharacterUtility.Ready || !Config.EnableMods)
             return;
 
         ResidentResources.Reload();
-        collection._cache?.Meta.SetFiles();
+        if (collection?._cache == null)
+            CharacterUtility.ResetAll();
+        else
+            collection._cache.Meta.SetFiles();
     }
 
     /// <summary>

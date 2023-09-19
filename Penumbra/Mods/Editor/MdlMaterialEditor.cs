@@ -1,10 +1,7 @@
-using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
 using OtterGui;
+using OtterGui.Compression;
 using Penumbra.GameData.Enums;
 using Penumbra.GameData.Files;
 using Penumbra.Mods.Editor;
@@ -26,10 +23,10 @@ public partial class MdlMaterialEditor
     public MdlMaterialEditor(ModFileCollection files)
         => _files = files;
 
-    public void SaveAllModels()
+    public void SaveAllModels(FileCompactor compactor)
     {
         foreach (var info in _modelFiles)
-            info.Save();
+            info.Save(compactor);
     }
 
     public void RestoreAllModels()

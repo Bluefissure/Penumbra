@@ -1,10 +1,6 @@
 using Dalamud.Hooking;
 using Dalamud.Utility.Signatures;
-using System;
-using System.Collections;
-using System.Collections.Generic;
-using System.Threading;
-using Dalamud.Game.ClientState.Objects;
+using Dalamud.Plugin.Services;
 using FFXIVClientStructs.FFXIV.Client.Game.Object;
 using Penumbra.GameData;
 using Penumbra.Interop.Services;
@@ -14,7 +10,7 @@ namespace Penumbra.Interop.PathResolving;
 
 public class DrawObjectState : IDisposable, IReadOnlyDictionary<nint, (nint, bool)>
 {
-    private readonly ObjectTable      _objects;
+    private readonly IObjectTable     _objects;
     private readonly GameEventManager _gameEvents;
 
     private readonly Dictionary<nint, (nint GameObject, bool IsChild)> _drawObjectToGameObject = new();
@@ -24,7 +20,7 @@ public class DrawObjectState : IDisposable, IReadOnlyDictionary<nint, (nint, boo
     public nint LastGameObject
         => _lastGameObject.IsValueCreated && _lastGameObject.Value!.Count > 0 ? _lastGameObject.Value.Peek() : nint.Zero;
 
-    public DrawObjectState(ObjectTable objects, GameEventManager gameEvents)
+    public DrawObjectState(IObjectTable objects, GameEventManager gameEvents)
     {
         SignatureHelper.Initialise(this);
         _enableDrawHook.Enable();
@@ -76,7 +72,7 @@ public class DrawObjectState : IDisposable, IReadOnlyDictionary<nint, (nint, boo
     private unsafe void OnWeaponReloaded(nint _, nint gameObject)
     {
         _lastGameObject.Value!.Dequeue();
-        IterateDrawObjectTree((Object*) ((GameObject*) gameObject)->DrawObject, gameObject, false, false);
+        IterateDrawObjectTree((Object*)((GameObject*)gameObject)->DrawObject, gameObject, false, false);
     }
 
     private void OnCharacterBaseDestructor(nint characterBase)
@@ -132,15 +128,15 @@ public class DrawObjectState : IDisposable, IReadOnlyDictionary<nint, (nint, boo
     /// EnableDraw is what creates DrawObjects for gameObjects,
     /// so we always keep track of the current GameObject to be able to link it to the DrawObject.
     /// </summary>
-    private delegate void EnableDrawDelegate(nint gameObject, nint b, nint c, nint d);
+    private delegate void EnableDrawDelegate(nint gameObject);
 
     [Signature(Sigs.EnableDraw, DetourName = nameof(EnableDrawDetour))]
     private readonly Hook<EnableDrawDelegate> _enableDrawHook = null!;
 
-    private void EnableDrawDetour(nint gameObject, nint b, nint c, nint d)
+    private void EnableDrawDetour(nint gameObject)
     {
         _lastGameObject.Value!.Enqueue(gameObject);
-        _enableDrawHook.Original.Invoke(gameObject, b, c, d);
+        _enableDrawHook.Original.Invoke(gameObject);
         _lastGameObject.Value!.TryDequeue(out _);
     }
 }

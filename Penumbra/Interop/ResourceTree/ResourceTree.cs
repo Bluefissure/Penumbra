@@ -1,45 +1,60 @@
-using System;
-using System.Collections.Generic;
 using FFXIVClientStructs.FFXIV.Client.Game.Character;
-using FFXIVClientStructs.FFXIV.Client.Game.Object;
+using FFXIVClientStructs.FFXIV.Client.Graphics.Render;
 using FFXIVClientStructs.FFXIV.Client.Graphics.Scene;
 using Penumbra.GameData.Enums;
 using Penumbra.GameData.Structs;
 using Penumbra.Interop.Structs;
+using Penumbra.UI;
 using CustomizeData = FFXIVClientStructs.FFXIV.Client.Game.Character.CustomizeData;
 
 namespace Penumbra.Interop.ResourceTree;
 
 public class ResourceTree
 {
-    public readonly string             Name;
-    public readonly nint               SourceAddress;
-    public readonly bool               PlayerRelated;
-    public readonly string             CollectionName;
-    public readonly List<ResourceNode> Nodes;
+    public readonly string                Name;
+    public readonly int                   GameObjectIndex;
+    public readonly nint                  GameObjectAddress;
+    public readonly nint                  DrawObjectAddress;
+    public readonly bool                  LocalPlayerRelated;
+    public readonly bool                  PlayerRelated;
+    public readonly bool                  Networked;
+    public readonly string                CollectionName;
+    public readonly List<ResourceNode>    Nodes;
+    public readonly HashSet<ResourceNode> FlatNodes;
 
     public int           ModelId;
     public CustomizeData CustomizeData;
     public GenderRace    RaceCode;
 
-    public ResourceTree(string name, nint sourceAddress, bool playerRelated, string collectionName)
+    public ResourceTree(string name, int gameObjectIndex, nint gameObjectAddress, nint drawObjectAddress, bool localPlayerRelated, bool playerRelated, bool networked, string collectionName)
     {
-        Name           = name;
-        SourceAddress  = sourceAddress;
-        PlayerRelated  = playerRelated;
-        CollectionName = collectionName;
-        Nodes          = new List<ResourceNode>();
+        Name               = name;
+        GameObjectIndex    = gameObjectIndex;
+        GameObjectAddress  = gameObjectAddress;
+        DrawObjectAddress  = drawObjectAddress;
+        LocalPlayerRelated = localPlayerRelated;
+        Networked          = networked;
+        PlayerRelated      = playerRelated;
+        CollectionName     = collectionName;
+        Nodes              = new List<ResourceNode>();
+        FlatNodes          = new HashSet<ResourceNode>();
+    }
+
+    public void ProcessPostfix(Action<ResourceNode, ResourceNode?> action)
+    {
+        foreach (var node in Nodes)
+            node.ProcessPostfix(action, null);
     }
 
     internal unsafe void LoadResources(GlobalResolveContext globalContext)
     {
-        var character = (Character*)SourceAddress;
-        var model     = (CharacterBase*)character->GameObject.GetDrawObject();
-        var equipment = new ReadOnlySpan<CharacterArmor>(character->EquipSlotData, 10);
+        var character = (Character*)GameObjectAddress;
+        var model     = (CharacterBase*)DrawObjectAddress;
+        var equipment = new ReadOnlySpan<CharacterArmor>(&character->DrawData.Head, 10);
         // var customize = new ReadOnlySpan<byte>( character->CustomizeData, 26 );
-        ModelId       = character->ModelCharaId;
+        ModelId       = character->CharacterData.ModelCharaId;
         CustomizeData = character->DrawData.CustomizeData;
-        RaceCode      = model->GetModelType() == CharacterBase.ModelType.Human ? (GenderRace) ((Human*)model)->RaceSexId : GenderRace.Unknown;
+        RaceCode      = model->GetModelType() == CharacterBase.ModelType.Human ? (GenderRace)((Human*)model)->RaceSexId : GenderRace.Unknown;
 
         for (var i = 0; i < model->SlotCount; ++i)
         {
@@ -51,15 +66,25 @@ public class ResourceTree
             var imc     = (ResourceHandle*)model->IMCArray[i];
             var imcNode = context.CreateNodeFromImc(imc);
             if (imcNode != null)
-                Nodes.Add(globalContext.WithNames ? imcNode.WithName(imcNode.Name ?? $"IMC #{i}") : imcNode);
+            {
+                if (globalContext.WithUiData)
+                    imcNode.FallbackName = $"IMC #{i}";
+                Nodes.Add(imcNode);
+            }
 
-            var mdl     = (RenderModel*)model->ModelArray[i];
+            var mdl     = (RenderModel*)model->Models[i];
             var mdlNode = context.CreateNodeFromRenderModel(mdl);
             if (mdlNode != null)
-                Nodes.Add(globalContext.WithNames ? mdlNode.WithName(mdlNode.Name ?? $"Model #{i}") : mdlNode);
+            {
+                if (globalContext.WithUiData)
+                    mdlNode.FallbackName = $"Model #{i}";
+                Nodes.Add(mdlNode);
+            }
         }
 
-        if (character->GameObject.GetObjectKind() == (byte)ObjectKind.Pc)
+        AddSkeleton(Nodes, globalContext.CreateContext(EquipSlot.Unknown, default), model->Skeleton);
+
+        if (model->GetModelType() == CharacterBase.ModelType.Human)
             AddHumanResources(globalContext, (HumanExt*)model);
     }
 
@@ -85,17 +110,23 @@ public class ResourceTree
                     var imc     = (ResourceHandle*)subObject->IMCArray[i];
                     var imcNode = subObjectContext.CreateNodeFromImc(imc);
                     if (imcNode != null)
-                        subObjectNodes.Add(globalContext.WithNames
-                            ? imcNode.WithName(imcNode.Name ?? $"{subObjectNamePrefix} #{subObjectIndex}, IMC #{i}")
-                            : imcNode);
+                    {
+                        if (globalContext.WithUiData)
+                            imcNode.FallbackName = $"{subObjectNamePrefix} #{subObjectIndex}, IMC #{i}";
+                        subObjectNodes.Add(imcNode);
+                    }
 
-                    var mdl     = (RenderModel*)subObject->ModelArray[i];
+                    var mdl     = (RenderModel*)subObject->Models[i];
                     var mdlNode = subObjectContext.CreateNodeFromRenderModel(mdl);
                     if (mdlNode != null)
-                        subObjectNodes.Add(globalContext.WithNames
-                            ? mdlNode.WithName(mdlNode.Name ?? $"{subObjectNamePrefix} #{subObjectIndex}, Model #{i}")
-                            : mdlNode);
+                    {
+                        if (globalContext.WithUiData)
+                            mdlNode.FallbackName = $"{subObjectNamePrefix} #{subObjectIndex}, Model #{i}";
+                        subObjectNodes.Add(mdlNode);
+                    }
                 }
+
+                AddSkeleton(subObjectNodes, subObjectContext, subObject->Skeleton, $"{subObjectNamePrefix} #{subObjectIndex}, ");
 
                 subObject = (CharacterBase*)subObject->DrawObject.Object.NextSiblingObject;
                 ++subObjectIndex;
@@ -106,16 +137,45 @@ public class ResourceTree
 
         var context = globalContext.CreateContext(EquipSlot.Unknown, default);
 
-        var skeletonNode = context.CreateHumanSkeletonNode((GenderRace)human->Human.RaceSexId);
-        if (skeletonNode != null)
-            Nodes.Add(globalContext.WithNames ? skeletonNode.WithName(skeletonNode.Name ?? "Skeleton") : skeletonNode);
-
-        var decalNode = context.CreateNodeFromTex(human->Decal);
+        var decalNode = context.CreateNodeFromTex((TextureResourceHandle*)human->Decal);
         if (decalNode != null)
-            Nodes.Add(globalContext.WithNames ? decalNode.WithName(decalNode.Name ?? "Face Decal") : decalNode);
+        {
+            if (globalContext.WithUiData)
+            {
+                decalNode = decalNode.Clone();
+                decalNode.FallbackName = "Face Decal";
+                decalNode.Icon         = ChangedItemDrawer.ChangedItemIcon.Customization;
+            }
+            Nodes.Add(decalNode);
+        }
 
-        var legacyDecalNode = context.CreateNodeFromTex(human->LegacyBodyDecal);
+        var legacyDecalNode = context.CreateNodeFromTex((TextureResourceHandle*)human->LegacyBodyDecal);
         if (legacyDecalNode != null)
-            Nodes.Add(globalContext.WithNames ? legacyDecalNode.WithName(legacyDecalNode.Name ?? "Legacy Body Decal") : legacyDecalNode);
+        {
+            if (globalContext.WithUiData)
+            {
+                legacyDecalNode = legacyDecalNode.Clone();
+                legacyDecalNode.FallbackName = "Legacy Body Decal";
+                legacyDecalNode.Icon         = ChangedItemDrawer.ChangedItemIcon.Customization;
+            }
+            Nodes.Add(legacyDecalNode);
+        }
+    }
+
+    private unsafe void AddSkeleton(List<ResourceNode> nodes, ResolveContext context, Skeleton* skeleton, string prefix = "")
+    {
+        if (skeleton == null)
+            return;
+
+        for (var i = 0; i < skeleton->PartialSkeletonCount; ++i)
+        {
+            var sklbNode = context.CreateNodeFromPartialSkeleton(&skeleton->PartialSkeletons[i]);
+            if (sklbNode != null)
+            {
+                if (context.WithUiData)
+                    sklbNode.FallbackName = $"{prefix}Skeleton #{i}";
+                nodes.Add(sklbNode);
+            }
+        }
     }
 }

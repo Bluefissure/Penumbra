@@ -1,12 +1,9 @@
-using System;
-using System.Numerics;
 using Dalamud.Interface.Windowing;
 using Dalamud.Plugin;
 using ImGuiNET;
 using OtterGui;
+using OtterGui.Custom;
 using OtterGui.Raii;
-using Penumbra.Api.Enums;
-using Penumbra.Mods;
 using Penumbra.Services;
 using Penumbra.UI.Classes;
 using Penumbra.UI.Tabs;
@@ -24,14 +21,6 @@ public sealed class ConfigWindow : Window
     private          ConfigTabBar           _configTabs = null!;
     private          string?                _lastException;
 
-    public void SelectTab(TabType tab)
-        => _configTabs.SelectTab = tab;
-
-
-    public void SelectMod(Mod mod)
-        => _configTabs.Mods.SelectMod = mod;
-
-
     public ConfigWindow(PerformanceTracker tracker, DalamudPluginInterface pi, Configuration config, ValidityChecker checker,
         TutorialService tutorial)
         : base(GetLabel(checker))
@@ -48,8 +37,9 @@ public sealed class ConfigWindow : Window
 
     public void Setup(Penumbra penumbra, ConfigTabBar configTabs)
     {
-        _penumbra   = penumbra;
-        _configTabs = configTabs;
+        _penumbra             = penumbra;
+        _configTabs           = configTabs;
+        _configTabs.SelectTab = _config.SelectedTab;
     }
 
     public override bool DrawConditions()
@@ -87,7 +77,7 @@ public sealed class ConfigWindow : Window
             {
                 DrawProblemWindow(
                     $"You are loading a release version of Penumbra from the repository \"{_pluginInterface.SourceRepository}\" instead of the official repository.\n"
-                  + $"Please use the official repository at {ValidityChecker.Repository}.\n\n"
+                  + $"Please use the official repository at {ValidityChecker.Repository} or the suite repository at {ValidityChecker.SeaOfStars}.\n\n"
                   + "If you are developing for Penumbra and see this, you should compile your version in debug mode to avoid it.");
             }
             else if (_validityChecker.IsNotInstalledPenumbra)
@@ -108,7 +98,12 @@ public sealed class ConfigWindow : Window
             }
             else
             {
-                _configTabs.Draw();
+                var type = _configTabs.Draw();
+                if (type != _config.SelectedTab)
+                {
+                    _config.SelectedTab = type;
+                    _config.Save();
+                }
             }
 
             _lastException = null;
@@ -147,7 +142,7 @@ public sealed class ConfigWindow : Window
 
         ImGui.NewLine();
         ImGui.NewLine();
-        UiHelpers.DrawDiscordButton(0);
+        CustomGui.DrawDiscordButton(Penumbra.Chat, 0);
         ImGui.SameLine();
         UiHelpers.DrawSupportButton(_penumbra!);
         ImGui.NewLine();

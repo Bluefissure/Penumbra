@@ -1,61 +1,92 @@
-using System;
-using System.Collections.Generic;
-using Penumbra.GameData.Enums;
+using Penumbra.Api.Enums;
 using Penumbra.String.Classes;
+using ChangedItemIcon = Penumbra.UI.ChangedItemDrawer.ChangedItemIcon;
 
 namespace Penumbra.Interop.ResourceTree;
 
-public class ResourceNode
+public class ResourceNode : ICloneable
 {
-    public readonly string?            Name;
+    public          string?            Name;
+    public          string?            FallbackName;
+    public          ChangedItemIcon    Icon;
     public readonly ResourceType       Type;
-    public readonly nint               SourceAddress;
-    public readonly Utf8GamePath       GamePath;
-    public readonly Utf8GamePath[]     PossibleGamePaths;
-    public readonly FullPath           FullPath;
+    public readonly nint               ObjectAddress;
+    public readonly nint               ResourceHandle;
+    public          Utf8GamePath[]     PossibleGamePaths;
+    public          FullPath           FullPath;
+    public readonly ulong              Length;
     public readonly bool               Internal;
     public readonly List<ResourceNode> Children;
+    internal        ResolveContext?    ResolveContext;
 
-    public ResourceNode(string? name, ResourceType type, nint sourceAddress, Utf8GamePath gamePath, FullPath fullPath, bool @internal)
+    public Utf8GamePath GamePath
     {
-        Name          = name;
-        Type          = type;
-        SourceAddress = sourceAddress;
-        GamePath      = gamePath;
-        PossibleGamePaths = new[]
+        get => PossibleGamePaths.Length == 1 ? PossibleGamePaths[0] : Utf8GamePath.Empty;
+        set
         {
-            gamePath,
-        };
-        FullPath = fullPath;
-        Internal = @internal;
-        Children = new List<ResourceNode>();
+            if (value.IsEmpty)
+                PossibleGamePaths = Array.Empty<Utf8GamePath>();
+            else
+                PossibleGamePaths = new[] { value };
+        }
     }
 
-    public ResourceNode(string? name, ResourceType type, nint sourceAddress, Utf8GamePath[] possibleGamePaths, FullPath fullPath,
-        bool @internal)
+    internal ResourceNode(ResourceType type, nint objectAddress, nint resourceHandle, ulong length, bool @internal, ResolveContext? resolveContext)
     {
-        Name              = name;
         Type              = type;
-        SourceAddress     = sourceAddress;
-        GamePath          = possibleGamePaths.Length == 1 ? possibleGamePaths[0] : Utf8GamePath.Empty;
-        PossibleGamePaths = possibleGamePaths;
-        FullPath          = fullPath;
+        ObjectAddress     = objectAddress;
+        ResourceHandle    = resourceHandle;
+        PossibleGamePaths = Array.Empty<Utf8GamePath>();
+        Length            = length;
         Internal          = @internal;
         Children          = new List<ResourceNode>();
+        ResolveContext    = resolveContext;
     }
 
-    private ResourceNode(string? name, ResourceNode originalResourceNode)
+    private ResourceNode(ResourceNode other)
     {
-        Name              = name;
-        Type              = originalResourceNode.Type;
-        SourceAddress     = originalResourceNode.SourceAddress;
-        GamePath          = originalResourceNode.GamePath;
-        PossibleGamePaths = originalResourceNode.PossibleGamePaths;
-        FullPath          = originalResourceNode.FullPath;
-        Internal          = originalResourceNode.Internal;
-        Children          = originalResourceNode.Children;
+        Name              = other.Name;
+        FallbackName      = other.FallbackName;
+        Icon              = other.Icon;
+        Type              = other.Type;
+        ObjectAddress     = other.ObjectAddress;
+        ResourceHandle    = other.ResourceHandle;
+        PossibleGamePaths = other.PossibleGamePaths;
+        FullPath          = other.FullPath;
+        Length            = other.Length;
+        Internal          = other.Internal;
+        Children          = other.Children;
+        ResolveContext    = other.ResolveContext;
     }
 
-    public ResourceNode WithName(string? name)
-        => string.Equals(Name, name, StringComparison.Ordinal) ? this : new ResourceNode(name, this);
+    public ResourceNode Clone()
+        => new(this);
+
+    object ICloneable.Clone()
+        => Clone();
+
+    public void ProcessPostfix(Action<ResourceNode, ResourceNode?> action, ResourceNode? parent)
+    {
+        foreach (var child in Children)
+            child.ProcessPostfix(action, this);
+        action(this, parent);
+    }
+
+    public void SetUiData(UiData uiData)
+    {
+        Name = uiData.Name;
+        Icon = uiData.Icon;
+    }
+
+    public void PrependName(string prefix)
+    {
+        if (Name != null)
+            Name = prefix + Name;
+    }
+
+    public readonly record struct UiData(string? Name, ChangedItemIcon Icon)
+    {
+        public readonly UiData PrependName(string prefix)
+            => Name == null ? this : new UiData(prefix + Name, Icon);
+    }
 }

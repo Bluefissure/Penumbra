@@ -1,6 +1,3 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
 using Dalamud.Game;
 using Dalamud.Utility.Signatures;
 using Penumbra.Collections.Manager;
@@ -33,6 +30,7 @@ public unsafe partial class CharacterUtility : IDisposable
     public event Action LoadingFinished;
     public nint         DefaultTransparentResource { get; private set; }
     public nint         DefaultDecalResource       { get; private set; }
+    public nint         DefaultSkinShpkResource    { get; private set; }
 
     /// <summary>
     /// The relevant indices depend on which meta manipulations we allow for.
@@ -102,6 +100,12 @@ public unsafe partial class CharacterUtility : IDisposable
             anyMissing           |= DefaultDecalResource == nint.Zero;
         }
 
+        if (DefaultSkinShpkResource == nint.Zero)
+        {
+            DefaultSkinShpkResource =  (nint)Address->SkinShpkResource;
+            anyMissing              |= DefaultSkinShpkResource == nint.Zero;
+        }
+
         if (anyMissing)
             return;
 
@@ -141,11 +145,15 @@ public unsafe partial class CharacterUtility : IDisposable
     /// <summary> Return all relevant resources to the default resource. </summary>
     public void ResetAll()
     {
+        if (!Ready)
+            return;
+
         foreach (var list in _lists)
             list.Dispose();
 
         Address->TransparentTexResource = (TextureResourceHandle*)DefaultTransparentResource;
         Address->DecalTexResource       = (TextureResourceHandle*)DefaultDecalResource;
+        Address->SkinShpkResource       = (ResourceHandle*)DefaultSkinShpkResource;
     }
 
     public void Dispose()

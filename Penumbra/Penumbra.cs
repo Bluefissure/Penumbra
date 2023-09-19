@@ -1,7 +1,4 @@
-using System.IO;
-using System.Linq;
 using System.Text;
-using System.Threading.Tasks;
 using Dalamud.Plugin;
 using ImGuiNET;
 using Lumina.Excel.GeneratedSheets;
@@ -20,6 +17,10 @@ using Penumbra.Interop.Services;
 using Penumbra.Mods.Manager;
 using Penumbra.Collections.Manager;
 using Penumbra.UI.Tabs;
+using ChangedItemClick = Penumbra.Communication.ChangedItemClick;
+using ChangedItemHover = Penumbra.Communication.ChangedItemHover;
+using OtterGui.Tasks;
+using Penumbra.UI;
 
 namespace Penumbra;
 
@@ -28,8 +29,8 @@ public class Penumbra : IDalamudPlugin
     public string Name
         => "Penumbra";
 
-    public static readonly Logger Log = new();
-    public static ChatService ChatService { get; private set; } = null!;
+    public static readonly Logger      Log = new();
+    public static          ChatService Chat { get; private set; } = null!;
 
     private readonly ValidityChecker _validityChecker;
     private readonly ResidentResourceManager _residentResources;
@@ -50,11 +51,16 @@ public class Penumbra : IDalamudPlugin
     {
         try
         {
-            var startTimer = new StartTracker();
-            using var timer = startTimer.Measure(StartTimeType.Total);
-            _services = ServiceManager.CreateProvider(this, pluginInterface, Log, startTimer);
-            ChatService = _services.GetRequiredService<ChatService>();
+            var       startTimer = new StartTracker();
+            using var timer      = startTimer.Measure(StartTimeType.Total);
+            _services        = ServiceManager.CreateProvider(this, pluginInterface, Log, startTimer);
+            Chat      = _services.GetRequiredService<ChatService>();
             _validityChecker = _services.GetRequiredService<ValidityChecker>();
+            var startup = _services.GetRequiredService<DalamudServices>().GetDalamudConfig(DalamudServices.WaitingForPluginsOption, out bool s)
+                ? s.ToString()
+                : "Unknown";
+            Log.Information(
+                $"Loading Penumbra Version {_validityChecker.Version}, Commit #{_validityChecker.CommitHash} with Waiting For Plugins: {startup}...");
             _services.GetRequiredService<BackupService>(); // Initialize because not required anywhere else.
             _config = _services.GetRequiredService<Configuration>();
             _characterUtility = _services.GetRequiredService<CharacterUtility>();
@@ -73,6 +79,7 @@ public class Penumbra : IDalamudPlugin
             {
                 _services.GetRequiredService<PathResolver>();
             }
+            _services.GetRequiredService<SkinFixer>();
 
             SetupInterface();
             SetupApi();
@@ -86,8 +93,9 @@ public class Penumbra : IDalamudPlugin
             if (_characterUtility.Ready)
                 _residentResources.Reload();
         }
-        catch
+        catch (Exception ex)
         {
+            Log.Error($"Error constructing Penumbra, Disposing again:\n{ex}");
             Dispose();
             throw;
         }
@@ -98,31 +106,32 @@ public class Penumbra : IDalamudPlugin
         using var timer = _services.GetRequiredService<StartTracker>().Measure(StartTimeType.Api);
         var api = _services.GetRequiredService<IPenumbraApi>();
         _services.GetRequiredService<PenumbraIpcProviders>();
-        api.ChangedItemTooltip += it =>
+        _communicatorService.ChangedItemHover.Subscribe(it =>
         {
             if (it is Item)
                 ImGui.TextUnformatted("Left Click to create an item link in chat.");
-        };
-        api.ChangedItemClicked += (button, it) =>
+        }, ChangedItemHover.Priority.Link);
+
+        _communicatorService.ChangedItemClick.Subscribe((button, it) =>
         {
             if (button == MouseButton.Left && it is Item item)
-                ChatService.LinkItem(item);
-        };
+                Chat.LinkItem(item);
+        }, ChangedItemClick.Priority.Link);
     }
 
     private void SetupInterface()
     {
-        Task.Run(() =>
-        {
-            using var tInterface = _services.GetRequiredService<StartTracker>().Measure(StartTimeType.Interface);
-            var system = _services.GetRequiredService<PenumbraWindowSystem>();
-            system.Window.Setup(this, _services.GetRequiredService<ConfigTabBar>());
-            _services.GetRequiredService<CommandHandler>();
-            if (!_disposed)
-                _windowSystem = system;
-            else
-                system.Dispose();
-        }
+        AsyncTask.Run(() =>
+            {
+                using var tInterface = _services.GetRequiredService<StartTracker>().Measure(StartTimeType.Interface);
+                var       system     = _services.GetRequiredService<PenumbraWindowSystem>();
+                system.Window.Setup(this, _services.GetRequiredService<ConfigTabBar>());
+                _services.GetRequiredService<CommandHandler>();
+                if (!_disposed)
+                    _windowSystem = system;
+                else
+                    system.Dispose();
+            }
         );
     }
 
@@ -212,7 +221,7 @@ public class Penumbra : IDalamudPlugin
         sb.AppendLine("**Collections**");
         sb.Append($"> **`#Collections:                 `** {_collectionManager.Storage.Count - 1}\n");
         sb.Append($"> **`#Temp Collections:            `** {_tempCollections.Count}\n");
-        sb.Append($"> **`Active Collections:           `** {_collectionManager.Caches.Count - _tempCollections.Count}\n");
+        sb.Append($"> **`Active Collections:           `** {_collectionManager.Caches.Count}\n");
         sb.Append($"> **`Base Collection:              `** {_collectionManager.Active.Default.AnonymizedName}\n");
         sb.Append($"> **`Interface Collection:         `** {_collectionManager.Active.Interface.AnonymizedName}\n");
         sb.Append($"> **`Selected Collection:          `** {_collectionManager.Active.Current.AnonymizedName}\n");

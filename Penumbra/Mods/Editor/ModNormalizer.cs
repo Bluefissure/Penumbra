@@ -1,11 +1,8 @@
-using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
-using System.Threading.Tasks;
 using Dalamud.Interface.Internal.Notifications;
 using OtterGui;
+using OtterGui.Tasks;
 using Penumbra.Mods.Manager;
+using Penumbra.Mods.Subclasses;
 using Penumbra.String.Classes;
 
 namespace Penumbra.Mods;
@@ -19,11 +16,13 @@ public class ModNormalizer
     private string _normalizationDirName = null!;
     private string _oldDirName           = null!;
 
-    public int Step       { get; private set; }
-    public int TotalSteps { get; private set; }
+    public int  Step       { get; private set; }
+    public int  TotalSteps { get; private set; }
+    public Task Worker     { get; private set; } = Task.CompletedTask;
+
 
     public bool Running
-        => Step < TotalSteps;
+        => !Worker.IsCompleted;
 
     public ModNormalizer(ModManager modManager)
         => _modManager = modManager;
@@ -39,7 +38,7 @@ public class ModNormalizer
         Step                  = 0;
         TotalSteps            = mod.TotalFileCount + 5;
 
-        Task.Run(NormalizeSync);
+        Worker = TrackedTask.Run(NormalizeSync);
     }
 
     private void NormalizeSync()
@@ -75,7 +74,7 @@ public class ModNormalizer
         }
         catch (Exception e)
         {
-            Penumbra.ChatService.NotificationMessage($"Could not normalize mod:\n{e}", "Failure", NotificationType.Error);
+            Penumbra.Chat.NotificationMessage($"Could not normalize mod:\n{e}", "Failure", NotificationType.Error);
         }
         finally
         {
@@ -88,7 +87,7 @@ public class ModNormalizer
     {
         if (Directory.Exists(_normalizationDirName))
         {
-            Penumbra.ChatService.NotificationMessage("Could not normalize mod:\n"
+            Penumbra.Chat.NotificationMessage("Could not normalize mod:\n"
               + "The directory TmpNormalization may not already exist when normalizing a mod.", "Failure",
                 NotificationType.Error);
             return false;
@@ -96,7 +95,7 @@ public class ModNormalizer
 
         if (Directory.Exists(_oldDirName))
         {
-            Penumbra.ChatService.NotificationMessage("Could not normalize mod:\n"
+            Penumbra.Chat.NotificationMessage("Could not normalize mod:\n"
               + "The directory TmpNormalizationOld may not already exist when normalizing a mod.", "Failure",
                 NotificationType.Error);
             return false;
@@ -202,7 +201,7 @@ public class ModNormalizer
         }
         catch (Exception e)
         {
-            Penumbra.ChatService.NotificationMessage($"Could not normalize mod:\n{e}", "Failure", NotificationType.Error);
+            Penumbra.Chat.NotificationMessage($"Could not normalize mod:\n{e}", "Failure", NotificationType.Error);
         }
 
         return false;
@@ -230,7 +229,7 @@ public class ModNormalizer
         }
         catch (Exception e)
         {
-            Penumbra.ChatService.NotificationMessage($"Could not move old files out of the way while normalizing mod mod:\n{e}", "Failure",
+            Penumbra.Chat.NotificationMessage($"Could not move old files out of the way while normalizing mod mod:\n{e}", "Failure",
                 NotificationType.Error);
         }
 
@@ -254,7 +253,7 @@ public class ModNormalizer
         }
         catch (Exception e)
         {
-            Penumbra.ChatService.NotificationMessage($"Could not move new files into the mod while normalizing mod mod:\n{e}", "Failure",
+            Penumbra.Chat.NotificationMessage($"Could not move new files into the mod while normalizing mod mod:\n{e}", "Failure",
                 NotificationType.Error);
             foreach (var dir in Mod.ModPath.EnumerateDirectories())
             {
@@ -280,7 +279,7 @@ public class ModNormalizer
 
     private void ApplyRedirections()
     {
-        foreach (var option in Mod.AllSubMods.OfType<SubMod>())
+        foreach (var option in Mod.AllSubMods)
             _modManager.OptionEditor.OptionSetFiles(Mod, option.GroupIdx, option.OptionIdx,
                 _redirections[option.GroupIdx + 1][option.OptionIdx]);
 

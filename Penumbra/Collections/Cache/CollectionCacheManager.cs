@@ -1,9 +1,4 @@
-using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
+using Dalamud.Game;
 using OtterGui.Classes;
 using Penumbra.Api;
 using Penumbra.Api.Enums;
@@ -13,45 +8,55 @@ using Penumbra.Meta;
 using Penumbra.Mods;
 using Penumbra.Mods.Manager;
 using Penumbra.Services;
+using Penumbra.String.Classes;
 
 namespace Penumbra.Collections.Cache;
 
 public class CollectionCacheManager : IDisposable
 {
-    private readonly FrameworkManager    _framework;
-    private readonly CommunicatorService _communicator;
-    private readonly TempModManager      _tempMods;
-    private readonly ModStorage          _modStorage;
-    private readonly CollectionStorage   _storage;
-    private readonly ActiveCollections   _active;
+    private readonly  FrameworkManager    _framework;
+    private readonly  CommunicatorService _communicator;
+    private readonly  TempModManager      _tempMods;
+    private readonly  ModStorage          _modStorage;
+    private readonly  CollectionStorage   _storage;
+    private readonly  ActiveCollections   _active;
+    internal readonly ResolvedFileChanged ResolvedFileChanged;
 
     internal readonly MetaFileManager MetaFileManager;
 
-    public int  Count       { get; private set; }
+    private readonly ConcurrentQueue<CollectionCache.ChangeData> _changeQueue = new();
+
+    private int _count;
+
+    public int Count
+        => _count;
 
     public IEnumerable<ModCollection> Active
         => _storage.Where(c => c.HasCache);
 
-    public CollectionCacheManager(FrameworkManager framework, CommunicatorService communicator,
-        TempModManager tempMods, ModStorage modStorage, MetaFileManager metaFileManager, ActiveCollections active, CollectionStorage storage)
+    public CollectionCacheManager(FrameworkManager framework, CommunicatorService communicator, TempModManager tempMods, ModStorage modStorage,
+        MetaFileManager metaFileManager, ActiveCollections active, CollectionStorage storage)
     {
-        _framework      = framework;
-        _communicator   = communicator;
-        _tempMods       = tempMods;
-        _modStorage     = modStorage;
-        MetaFileManager = metaFileManager;
-        _active         = active;
-        _storage        = storage;
+        _framework          = framework;
+        _communicator       = communicator;
+        _tempMods           = tempMods;
+        _modStorage         = modStorage;
+        MetaFileManager     = metaFileManager;
+        _active             = active;
+        _storage            = storage;
+        ResolvedFileChanged = _communicator.ResolvedFileChanged;
 
         if (!_active.Individuals.IsLoaded)
             _active.Individuals.Loaded += CreateNecessaryCaches;
+        _framework.Framework.Update += OnFramework;
         _communicator.CollectionChange.Subscribe(OnCollectionChange, CollectionChange.Priority.CollectionCacheManager);
         _communicator.ModPathChanged.Subscribe(OnModChangeAddition, ModPathChanged.Priority.CollectionCacheManagerAddition);
         _communicator.ModPathChanged.Subscribe(OnModChangeRemoval,  ModPathChanged.Priority.CollectionCacheManagerRemoval);
         _communicator.TemporaryGlobalModChange.Subscribe(OnGlobalModChange, TemporaryGlobalModChange.Priority.CollectionCacheManager);
         _communicator.ModOptionChanged.Subscribe(OnModOptionChange, ModOptionChanged.Priority.CollectionCacheManager);
         _communicator.ModSettingChanged.Subscribe(OnModSettingChange, ModSettingChanged.Priority.CollectionCacheManager);
-        _communicator.CollectionInheritanceChanged.Subscribe(OnCollectionInheritanceChange, CollectionInheritanceChanged.Priority.CollectionCacheManager);
+        _communicator.CollectionInheritanceChanged.Subscribe(OnCollectionInheritanceChange,
+            CollectionInheritanceChanged.Priority.CollectionCacheManager);
         _communicator.ModDiscoveryStarted.Subscribe(OnModDiscoveryStarted, ModDiscoveryStarted.Priority.CollectionCacheManager);
         _communicator.ModDiscoveryFinished.Subscribe(OnModDiscoveryFinished, ModDiscoveryFinished.Priority.CollectionCacheManager);
 
@@ -71,14 +76,37 @@ public class CollectionCacheManager : IDisposable
         MetaFileManager.CharacterUtility.LoadingFinished -= IncrementCounters;
     }
 
+    public void AddChange(CollectionCache.ChangeData data)
+    {
+        if (data.Cache.Calculating == -1)
+        {
+            if (_framework.Framework.IsInFrameworkUpdateThread)
+                data.Apply();
+            else
+                _changeQueue.Enqueue(data);
+        }
+        else if (data.Cache.Calculating == Environment.CurrentManagedThreadId)
+        {
+            data.Apply();
+        }
+        else
+        {
+            _changeQueue.Enqueue(data);
+        }
+    }
+
     /// <summary> Only creates a new cache, does not update an existing one. </summary>
     public bool CreateCache(ModCollection collection)
     {
-        if (collection.HasCache || collection.Index == ModCollection.Empty.Index)
+        if (collection.Index == ModCollection.Empty.Index)
+            return false;
+
+        if (collection._cache != null)
             return false;
 
         collection._cache = new CollectionCache(this, collection);
-        ++Count;
+        if (collection.Index > 0)
+            Interlocked.Increment(ref _count);
         Penumbra.Log.Verbose($"Created new cache for collection {collection.AnonymizedName}.");
         return true;
     }
@@ -97,29 +125,38 @@ public class CollectionCacheManager : IDisposable
         if (collection.Index == 0)
             return;
 
-        Penumbra.Log.Debug($"[{Thread.CurrentThread.ManagedThreadId}] Recalculating effective file list for {collection.AnonymizedName}");
+        Penumbra.Log.Debug($"[{Environment.CurrentManagedThreadId}] Recalculating effective file list for {collection.AnonymizedName}");
         if (!collection.HasCache)
         {
             Penumbra.Log.Error(
-                $"[{Thread.CurrentThread.ManagedThreadId}] Recalculating effective file list for {collection.AnonymizedName} failed, no cache exists.");
-            return;
+                $"[{Environment.CurrentManagedThreadId}] Recalculating effective file list for {collection.AnonymizedName} failed, no cache exists.");
         }
+        else if (collection._cache!.Calculating != -1)
+        {
+            Penumbra.Log.Error(
+                $"[{Environment.CurrentManagedThreadId}] Recalculating effective file list for {collection.AnonymizedName} failed, already in calculation on [{collection._cache!.Calculating}].");
+        }
+        else
+        {
+            FullRecalculation(collection);
 
-        FullRecalculation(collection);
-
-        Penumbra.Log.Debug(
-            $"[{Thread.CurrentThread.ManagedThreadId}] Recalculation of effective file list for {collection.AnonymizedName} finished.");
+            Penumbra.Log.Debug(
+                $"[{Environment.CurrentManagedThreadId}] Recalculation of effective file list for {collection.AnonymizedName} finished.");
+        }
     }
 
     private void FullRecalculation(ModCollection collection)
     {
         var cache = collection._cache;
-        if (cache == null || cache.Calculating)
+        if (cache is not { Calculating: -1 })
             return;
 
-        cache.Calculating = true;
+        cache.Calculating = Environment.CurrentManagedThreadId;
         try
         {
+            ResolvedFileChanged.Invoke(collection, ResolvedFileChanged.Type.FullRecomputeStart, Utf8GamePath.Empty, FullPath.Empty,
+                FullPath.Empty,
+                null);
             cache.ResolvedFiles.Clear();
             cache.Meta.Reset();
             cache._conflicts.Clear();
@@ -129,20 +166,23 @@ public class CollectionCacheManager : IDisposable
                          .Concat(_tempMods.Mods.TryGetValue(collection, out var list)
                              ? list
                              : Array.Empty<TemporaryMod>()))
-                cache.AddMod(tempMod, false);
+                cache.AddModSync(tempMod, false);
 
             foreach (var mod in _modStorage)
-                cache.AddMod(mod, false);
+                cache.AddModSync(mod, false);
 
-            cache.AddMetaFiles();
+            cache.AddMetaFiles(true);
 
-            ++collection.ChangeCounter;
+            collection.IncrementCounter();
 
             MetaFileManager.ApplyDefaultFiles(collection);
+            ResolvedFileChanged.Invoke(collection, ResolvedFileChanged.Type.FullRecomputeFinished, Utf8GamePath.Empty, FullPath.Empty,
+                FullPath.Empty,
+                null);
         }
         finally
         {
-            cache.Calculating = false;
+            cache.Calculating = -1;
         }
     }
 
@@ -159,9 +199,14 @@ public class CollectionCacheManager : IDisposable
         else
         {
             RemoveCache(old);
-
             if (type is not CollectionType.Inactive && newCollection != null && newCollection.Index != 0 && CreateCache(newCollection))
                 CalculateEffectiveFileList(newCollection);
+
+            if (type is CollectionType.Default)
+                if (newCollection != null)
+                    MetaFileManager.ApplyDefaultFiles(newCollection);
+                else
+                    MetaFileManager.CharacterUtility.ResetAll();
         }
     }
 
@@ -237,7 +282,7 @@ public class CollectionCacheManager : IDisposable
     private void IncrementCounters()
     {
         foreach (var collection in _storage.Where(c => c.HasCache))
-            ++collection.ChangeCounter;
+            collection.IncrementCounter();
         MetaFileManager.CharacterUtility.LoadingFinished -= IncrementCounters;
     }
 
@@ -295,7 +340,8 @@ public class CollectionCacheManager : IDisposable
 
         collection._cache!.Dispose();
         collection._cache = null;
-        --Count;
+        if (collection.Index > 0)
+            Interlocked.Decrement(ref _count);
         Penumbra.Log.Verbose($"Cleared cache of collection {collection.AnonymizedName}.");
     }
 
@@ -305,17 +351,19 @@ public class CollectionCacheManager : IDisposable
     /// </summary>
     public void CreateNecessaryCaches()
     {
-        var tasks = _active.SpecialAssignments.Select(p => p.Value)
-            .Concat(_active.Individuals.Select(p => p.Collection))
-            .Prepend(_active.Current)
-            .Prepend(_active.Default)
-            .Prepend(_active.Interface)
-            .Where(CreateCache)
-            .Select(c => Task.Run(() => CalculateEffectiveFileListInternal(c)))
-            .ToArray();
+        ModCollection[] caches;
+        // Lock to make sure no race conditions during CreateCache happen.
+        lock (this)
+        {
+            caches = _active.SpecialAssignments.Select(p => p.Value)
+                .Concat(_active.Individuals.Select(p => p.Collection))
+                .Prepend(_active.Current)
+                .Prepend(_active.Default)
+                .Prepend(_active.Interface)
+                .Where(CreateCache).ToArray();
+        }
 
-        Penumbra.Log.Debug($"Creating {tasks.Length} necessary caches.");
-        Task.WaitAll(tasks);
+        Parallel.ForEach(caches, CalculateEffectiveFileListInternal);
     }
 
     private void OnModDiscoveryStarted()
@@ -329,8 +377,14 @@ public class CollectionCacheManager : IDisposable
     }
 
     private void OnModDiscoveryFinished()
+        => Parallel.ForEach(Active, CalculateEffectiveFileListInternal);
+
+    /// <summary>
+    /// Update forced files only on framework.
+    /// </summary>
+    private void OnFramework(Framework _)
     {
-        var tasks = Active.Select(c => Task.Run(() => CalculateEffectiveFileListInternal(c))).ToArray();
-        Task.WaitAll(tasks);
+        while (_changeQueue.TryDequeue(out var changeData))
+            changeData.Apply();
     }
 }

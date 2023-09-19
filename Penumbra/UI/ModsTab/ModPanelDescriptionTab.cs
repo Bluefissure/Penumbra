@@ -1,12 +1,9 @@
-using System;
 using Dalamud.Interface;
 using ImGuiNET;
 using OtterGui.Raii;
 using OtterGui;
 using OtterGui.Widgets;
-using Penumbra.Mods;
 using Penumbra.Mods.Manager;
-using Penumbra.UI.Classes;
 
 namespace Penumbra.UI.ModsTab;
 
@@ -14,7 +11,7 @@ public class ModPanelDescriptionTab : ITab
 {
     private readonly ModFileSystemSelector _selector;
     private readonly TutorialService       _tutorial;
-    private readonly ModManager           _modManager;
+    private readonly ModManager            _modManager;
     private readonly TagButtons            _localTags = new();
     private readonly TagButtons            _modTags   = new();
 

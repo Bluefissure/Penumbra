@@ -1,12 +1,11 @@
-using System;
-using System.Threading;
-using Dalamud.Game.ClientState.Objects;
+using Dalamud.Game.ClientState.Conditions;
 using Dalamud.Hooking;
+using Dalamud.Plugin.Services;
 using Dalamud.Utility.Signatures;
 using FFXIVClientStructs.FFXIV.Client.Graphics.Scene;
 using Penumbra.Collections;
+using Penumbra.Api.Enums;
 using Penumbra.GameData;
-using Penumbra.GameData.Enums;
 using Penumbra.Interop.Structs;
 using Penumbra.String;
 using Penumbra.String.Classes;
@@ -18,22 +17,24 @@ namespace Penumbra.Interop.PathResolving;
 public unsafe class AnimationHookService : IDisposable
 {
     private readonly PerformanceTracker _performance;
-    private readonly ObjectTable        _objects;
+    private readonly IObjectTable       _objects;
     private readonly CollectionResolver _collectionResolver;
     private readonly DrawObjectState    _drawObjectState;
     private readonly CollectionResolver _resolver;
+    private readonly Condition          _conditions;
 
     private readonly ThreadLocal<ResolveData> _animationLoadData  = new(() => ResolveData.Invalid, true);
     private readonly ThreadLocal<ResolveData> _characterSoundData = new(() => ResolveData.Invalid, true);
 
-    public AnimationHookService(PerformanceTracker performance, ObjectTable objects, CollectionResolver collectionResolver,
-        DrawObjectState drawObjectState, CollectionResolver resolver)
+    public AnimationHookService(PerformanceTracker performance, IObjectTable objects, CollectionResolver collectionResolver,
+        DrawObjectState drawObjectState, CollectionResolver resolver, Condition conditions)
     {
         _performance        = performance;
         _objects            = objects;
         _collectionResolver = collectionResolver;
         _drawObjectState    = drawObjectState;
         _resolver           = resolver;
+        _conditions         = conditions;
 
         SignatureHelper.Initialise(this);
 
@@ -48,7 +49,7 @@ public unsafe class AnimationHookService : IDisposable
         _unkMountAnimationHook.Enable();
         _unkParasolAnimationHook.Enable();
         _dismountHook.Enable();
-        _vfxWeaponHook.Enable();
+        _apricotListenerSoundPlayHook.Enable();
     }
 
     public bool HandleFiles(ResourceType type, Utf8GamePath _, out ResolveData resolveData)
@@ -56,13 +57,13 @@ public unsafe class AnimationHookService : IDisposable
         switch (type)
         {
             case ResourceType.Scd:
-                if (_characterSoundData.IsValueCreated && _characterSoundData.Value.Valid)
+                if (_characterSoundData is { IsValueCreated: true, Value.Valid: true })
                 {
                     resolveData = _characterSoundData.Value;
                     return true;
                 }
 
-                if (_animationLoadData.IsValueCreated && _animationLoadData.Value.Valid)
+                if (_animationLoadData is { IsValueCreated: true, Value.Valid: true })
                 {
                     resolveData = _animationLoadData.Value;
                     return true;
@@ -73,7 +74,7 @@ public unsafe class AnimationHookService : IDisposable
             case ResourceType.Pap:
             case ResourceType.Avfx:
             case ResourceType.Atex:
-                if (_animationLoadData.IsValueCreated && _animationLoadData.Value.Valid)
+                if (_animationLoadData is { IsValueCreated: true, Value.Valid: true })
                 {
                     resolveData = _animationLoadData.Value;
                     return true;
@@ -106,7 +107,7 @@ public unsafe class AnimationHookService : IDisposable
         _unkMountAnimationHook.Dispose();
         _unkParasolAnimationHook.Dispose();
         _dismountHook.Dispose();
-        _vfxWeaponHook.Dispose();
+        _apricotListenerSoundPlayHook.Dispose();
     }
 
     /// <summary> Characters load some of their voice lines or whatever with this function. </summary>
@@ -137,7 +138,11 @@ public unsafe class AnimationHookService : IDisposable
     private ulong LoadTimelineResourcesDetour(IntPtr timeline)
     {
         using var performance = _performance.Measure(PerformanceType.TimelineResources);
-        var       last        = _animationLoadData.Value;
+        // Do not check timeline loading in cutscenes.
+        if (_conditions[ConditionFlag.OccupiedInCutSceneEvent] || _conditions[ConditionFlag.WatchingCutscene78])
+            return _loadTimelineResourcesHook.Original(timeline);
+
+        var last = _animationLoadData.Value;
         _animationLoadData.Value = GetDataFromTimeline(timeline);
         var ret = _loadTimelineResourcesHook.Original(timeline);
         _animationLoadData.Value = last;
@@ -287,13 +292,13 @@ public unsafe class AnimationHookService : IDisposable
     }
 
     /// <summary> Use timelines vfuncs to obtain the associated game object. </summary>
-    private ResolveData GetDataFromTimeline(IntPtr timeline)
+    private ResolveData GetDataFromTimeline(nint timeline)
     {
         try
         {
             if (timeline != IntPtr.Zero)
             {
-                var getGameObjectIdx = ((delegate* unmanaged<IntPtr, int>**)timeline)[0][Offsets.GetGameObjectIdxVfunc];
+                var getGameObjectIdx = ((delegate* unmanaged<nint, int>**)timeline)[0][Offsets.GetGameObjectIdxVfunc];
                 var idx              = getGameObjectIdx(timeline);
                 if (idx >= 0 && idx < _objects.Length)
                 {
@@ -309,7 +314,6 @@ public unsafe class AnimationHookService : IDisposable
 
         return ResolveData.Invalid;
     }
-
 
     private delegate void UnkMountAnimationDelegate(DrawObject* drawObject, uint unk1, byte unk2, uint unk3);
 
@@ -334,7 +338,7 @@ public unsafe class AnimationHookService : IDisposable
     {
         var last = _animationLoadData.Value;
         _animationLoadData.Value = _collectionResolver.IdentifyCollection(drawObject, true);
-        _unkParasolAnimationHook!.Original(drawObject, unk1);
+        _unkParasolAnimationHook.Original(drawObject, unk1);
         _animationLoadData.Value = last;
     }
 
@@ -364,23 +368,34 @@ public unsafe class AnimationHookService : IDisposable
         _animationLoadData.Value = last;
     }
 
-    [Signature("48 89 6C 24 ?? 41 54 41 56 41 57 48 81 EC", DetourName = nameof(VfxWeaponDetour))]
-    private readonly Hook<VfxWeaponDelegate> _vfxWeaponHook = null!;
+    [Signature("48 89 6C 24 ?? 41 54 41 56 41 57 48 81 EC", DetourName = nameof(ApricotListenerSoundPlayDetour))]
+    private readonly Hook<ApricotListenerSoundPlayDelegate> _apricotListenerSoundPlayHook = null!;
 
-    private delegate nint VfxWeaponDelegate(nint a1, nint a2, nint a3, nint a4, nint a5, nint a6);
+    private delegate nint ApricotListenerSoundPlayDelegate(nint a1, nint a2, nint a3, nint a4, nint a5, nint a6);
 
-    private nint VfxWeaponDetour(nint a1, nint a2, nint a3, nint a4, nint a5, nint a6)
+    private nint ApricotListenerSoundPlayDetour(nint a1, nint a2, nint a3, nint a4, nint a5, nint a6)
     {
         if (a6 == nint.Zero)
-            return _vfxWeaponHook!.Original(a1, a2, a3, a4, a5, a6);
-
-        var drawObject = ((DrawObject**)a6)[1];
-        if (drawObject == null)
-            return _vfxWeaponHook!.Original(a1, a2, a3, a4, a5, a6);
+            return _apricotListenerSoundPlayHook!.Original(a1, a2, a3, a4, a5, a6);
 
         var last = _animationLoadData.Value;
-        _animationLoadData.Value = _collectionResolver.IdentifyCollection(drawObject, true);
-        var ret = _vfxWeaponHook!.Original(a1, a2, a3, a4, a5, a6);
+        // a6 is some instance of Apricot.IInstanceListenner, in some cases we can obtain the associated caster via vfunc 1.
+        var gameObject = (*(delegate* unmanaged<nint, GameObject*>**)a6)[1](a6);
+        if (gameObject != null)
+        {
+            _animationLoadData.Value = _collectionResolver.IdentifyCollection(gameObject, true);
+        }
+        else
+        {
+            // for VfxListenner we can obtain the associated draw object as its first member,
+            // if the object has different type, drawObject will contain other values or garbage,
+            // but only be used in a dictionary pointer lookup, so this does not hurt.
+            var drawObject = ((DrawObject**)a6)[1];
+            if (drawObject != null)
+                _animationLoadData.Value = _collectionResolver.IdentifyCollection(drawObject, true);
+        }
+
+        var ret = _apricotListenerSoundPlayHook!.Original(a1, a2, a3, a4, a5, a6);
         _animationLoadData.Value = last;
         return ret;
     }

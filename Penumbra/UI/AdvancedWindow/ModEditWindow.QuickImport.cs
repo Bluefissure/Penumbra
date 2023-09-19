@@ -1,8 +1,3 @@
-using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
-using System.Numerics;
 using Dalamud.Interface;
 using ImGuiNET;
 using Lumina.Data;
@@ -11,6 +6,8 @@ using OtterGui.Raii;
 using Penumbra.GameData.Files;
 using Penumbra.Interop.ResourceTree;
 using Penumbra.Mods;
+using Penumbra.Mods.Editor;
+using Penumbra.Mods.Subclasses;
 using Penumbra.String.Classes;
 
 namespace Penumbra.UI.AdvancedWindow;
@@ -72,7 +69,7 @@ public partial class ModEditWindow
 
                     try
                     {
-                        File.WriteAllBytes(name, writable!.Write());
+                        _editor.Compactor.WriteAllBytes(name, writable!.Write());
                     }
                     catch (Exception e)
                     {
@@ -194,7 +191,7 @@ public partial class ModEditWindow
             var directory = Path.GetDirectoryName(_targetPath);
             if (directory != null)
                 Directory.CreateDirectory(directory);
-            File.WriteAllBytes(_targetPath!, _file!.Write());
+            _editor.Compactor.WriteAllBytes(_targetPath!, _file!.Write());
             _editor.FileEditor.Revert(_editor.Mod!, _editor.Option!);
             var fileRegistry = _editor.Files.Available.First(file => file.File.FullName == _targetPath);
             _editor.FileEditor.AddPathsToSelected(_editor.Option!, new[]

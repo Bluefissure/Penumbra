@@ -1,7 +1,4 @@
-using System;
-using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
-using System.Linq;
 using Dalamud.Game.ClientState.Objects.Enums;
 using OtterGui.Filesystem;
 using Penumbra.GameData.Actors;
@@ -12,15 +9,17 @@ namespace Penumbra.Collections.Manager;
 
 public sealed partial class IndividualCollections
 {
-    private readonly Configuration                                                                                    _config;
-    private readonly ActorService                                                                                     _actorService;
-    private readonly List<(string DisplayName, IReadOnlyList<ActorIdentifier> Identifiers, ModCollection Collection)> _assignments = new();
-    private readonly Dictionary<ActorIdentifier, ModCollection>                                                       _individuals = new();
+    public record struct IndividualAssignment(string DisplayName, IReadOnlyList<ActorIdentifier> Identifiers, ModCollection Collection);
+
+    private readonly Configuration                              _config;
+    private readonly ActorService                               _actorService;
+    private readonly Dictionary<ActorIdentifier, ModCollection> _individuals = new();
+    private readonly List<IndividualAssignment>                 _assignments = new();
 
     public event Action Loaded;
     public bool         IsLoaded { get; private set; }
 
-    public IReadOnlyList<(string DisplayName, IReadOnlyList<ActorIdentifier> Identifiers, ModCollection Collection)> Assignments
+    public IReadOnlyList<IndividualAssignment> Assignments
         => _assignments;
 
     public IndividualCollections(ActorService actorService, Configuration config, bool temporary)
@@ -94,7 +93,7 @@ public sealed partial class IndividualCollections
 
                 identifiers = new[]
                 {
-                    manager.CreateRetainer(retainerName, 0),
+                    manager.CreateRetainer(retainerName, ActorIdentifier.RetainerType.Both),
                 };
                 break;
             case IdentifierType.Owned:
@@ -129,11 +128,12 @@ public sealed partial class IndividualCollections
                 ObjectKind.EventNpc  => manager.Data.ENpcs,
                 ObjectKind.Companion => manager.Data.Companions,
                 ObjectKind.MountType => manager.Data.Mounts,
-                (ObjectKind)15       => manager.Data.Ornaments,
+                ObjectKind.Ornament  => manager.Data.Ornaments,
                 _                    => throw new NotImplementedException(),
             };
             return table.Where(kvp => kvp.Value == name)
-                .Select(kvp => manager.CreateIndividualUnchecked(identifier.Type, identifier.PlayerName, identifier.HomeWorld, identifier.Kind,
+                .Select(kvp => manager.CreateIndividualUnchecked(identifier.Type, identifier.PlayerName, identifier.HomeWorld.Id,
+                    identifier.Kind,
                     kvp.Key)).ToArray();
         }
 
@@ -182,7 +182,7 @@ public sealed partial class IndividualCollections
             }
         }
 
-        _assignments.Add((displayName, identifiers, collection));
+        _assignments.Add(new IndividualAssignment(displayName, identifiers, collection));
 
         return true;
     }

@@ -7,13 +7,9 @@ using Penumbra.Interop.PathResolving;
 using Penumbra.Interop.Structs;
 using Penumbra.Meta.Manipulations;
 using Penumbra.Mods;
-using System;
-using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
-using System.IO;
-using System.Linq;
-using System.Runtime.CompilerServices;
 using FFXIVClientStructs.FFXIV.Client.Graphics.Scene;
+using OtterGui.Compression;
 using Penumbra.Api.Enums;
 using Penumbra.GameData.Actors;
 using Penumbra.Interop.ResourceLoading;
@@ -23,15 +19,18 @@ using Penumbra.String.Classes;
 using Penumbra.Services;
 using Penumbra.Collections.Manager;
 using Penumbra.Communication;
+using Penumbra.Import.Textures;
 using Penumbra.Interop.Services;
 using Penumbra.UI;
+using TextureType = Penumbra.Api.Enums.TextureType;
+using Penumbra.Interop.ResourceTree;
 
 namespace Penumbra.Api;
 
 public class PenumbraApi : IDisposable, IPenumbraApi
 {
     public (int, int) ApiVersion
-        => (4, 20);
+        => (4, 22);
 
     public event Action<string>? PreSettingsPanelDraw
     {
@@ -69,7 +68,8 @@ public class PenumbraApi : IDisposable, IPenumbraApi
                 return;
 
             CheckInitialized();
-            _communicator.CreatingCharacterBase.Subscribe(new Action<nint, string, nint, nint, nint>(value), Communication.CreatingCharacterBase.Priority.Api);
+            _communicator.CreatingCharacterBase.Subscribe(new Action<nint, string, nint, nint, nint>(value),
+                Communication.CreatingCharacterBase.Priority.Api);
         }
         remove
         {
@@ -81,25 +81,7 @@ public class PenumbraApi : IDisposable, IPenumbraApi
         }
     }
 
-    public event CreatedCharacterBaseDelegate? CreatedCharacterBase
-    {
-        add
-        {
-            if (value == null)
-                return;
-
-            CheckInitialized();
-            _communicator.CreatedCharacterBase.Subscribe(new Action<nint, string, nint>(value), Communication.CreatedCharacterBase.Priority.Api);
-        }
-        remove
-        {
-            if (value == null)
-                return;
-
-            CheckInitialized();
-            _communicator.CreatedCharacterBase.Unsubscribe(new Action<nint, string, nint>(value));
-        }
-    }
+    public event CreatedCharacterBaseDelegate? CreatedCharacterBase;
 
     public bool Valid
         => _lumina != null;
@@ -122,34 +104,39 @@ public class PenumbraApi : IDisposable, IPenumbraApi
     private RedrawService         _redrawService;
     private ModFileSystem         _modFileSystem;
     private ConfigWindow          _configWindow;
+    private TextureManager        _textureManager;
+    private ResourceTreeFactory   _resourceTreeFactory;
 
     public unsafe PenumbraApi(CommunicatorService communicator, ModManager modManager, ResourceLoader resourceLoader,
         Configuration config, CollectionManager collectionManager, DalamudServices dalamud, TempCollectionManager tempCollections,
         TempModManager tempMods, ActorService actors, CollectionResolver collectionResolver, CutsceneService cutsceneService,
         ModImportManager modImportManager, CollectionEditor collectionEditor, RedrawService redrawService, ModFileSystem modFileSystem,
-        ConfigWindow configWindow)
+        ConfigWindow configWindow, TextureManager textureManager, ResourceTreeFactory resourceTreeFactory)
     {
-        _communicator       = communicator;
-        _modManager         = modManager;
-        _resourceLoader     = resourceLoader;
-        _config             = config;
-        _collectionManager  = collectionManager;
-        _dalamud            = dalamud;
-        _tempCollections    = tempCollections;
-        _tempMods           = tempMods;
-        _actors             = actors;
-        _collectionResolver = collectionResolver;
-        _cutsceneService    = cutsceneService;
-        _modImportManager   = modImportManager;
-        _collectionEditor   = collectionEditor;
-        _redrawService      = redrawService;
-        _modFileSystem      = modFileSystem;
-        _configWindow       = configWindow;
-        _lumina             = _dalamud.GameData.GameData;
+        _communicator        = communicator;
+        _modManager          = modManager;
+        _resourceLoader      = resourceLoader;
+        _config              = config;
+        _collectionManager   = collectionManager;
+        _dalamud             = dalamud;
+        _tempCollections     = tempCollections;
+        _tempMods            = tempMods;
+        _actors              = actors;
+        _collectionResolver  = collectionResolver;
+        _cutsceneService     = cutsceneService;
+        _modImportManager    = modImportManager;
+        _collectionEditor    = collectionEditor;
+        _redrawService       = redrawService;
+        _modFileSystem       = modFileSystem;
+        _configWindow        = configWindow;
+        _textureManager      = textureManager;
+        _resourceTreeFactory = resourceTreeFactory;
+        _lumina              = _dalamud.GameData.GameData;
 
         _resourceLoader.ResourceLoaded += OnResourceLoaded;
         _communicator.ModPathChanged.Subscribe(ModPathChangeSubscriber, ModPathChanged.Priority.Api);
         _communicator.ModSettingChanged.Subscribe(OnModSettingChange, Communication.ModSettingChanged.Priority.Api);
+        _communicator.CreatedCharacterBase.Subscribe(OnCreatedCharacterBase, Communication.CreatedCharacterBase.Priority.Api);
     }
 
     public unsafe void Dispose()
@@ -160,28 +147,32 @@ public class PenumbraApi : IDisposable, IPenumbraApi
         _resourceLoader.ResourceLoaded -= OnResourceLoaded;
         _communicator.ModPathChanged.Unsubscribe(ModPathChangeSubscriber);
         _communicator.ModSettingChanged.Unsubscribe(OnModSettingChange);
-        _lumina             = null;
-        _communicator       = null!;
-        _modManager         = null!;
-        _resourceLoader     = null!;
-        _config             = null!;
-        _collectionManager  = null!;
-        _dalamud            = null!;
-        _tempCollections    = null!;
-        _tempMods           = null!;
-        _actors             = null!;
-        _collectionResolver = null!;
-        _cutsceneService    = null!;
-        _modImportManager   = null!;
-        _collectionEditor   = null!;
-        _redrawService      = null!;
-        _modFileSystem      = null!;
-        _configWindow       = null!;
+        _communicator.CreatedCharacterBase.Unsubscribe(OnCreatedCharacterBase);
+        _lumina              = null;
+        _communicator        = null!;
+        _modManager          = null!;
+        _resourceLoader      = null!;
+        _config              = null!;
+        _collectionManager   = null!;
+        _dalamud             = null!;
+        _tempCollections     = null!;
+        _tempMods            = null!;
+        _actors              = null!;
+        _collectionResolver  = null!;
+        _cutsceneService     = null!;
+        _modImportManager    = null!;
+        _collectionEditor    = null!;
+        _redrawService       = null!;
+        _modFileSystem       = null!;
+        _configWindow        = null!;
+        _textureManager      = null!;
+        _resourceTreeFactory = null!;
     }
 
     public event ChangedItemClick? ChangedItemClicked
     {
-        add => _communicator.ChangedItemClick.Subscribe(new Action<MouseButton, object?>(value!), Communication.ChangedItemClick.Priority.Default);
+        add => _communicator.ChangedItemClick.Subscribe(new Action<MouseButton, object?>(value!),
+            Communication.ChangedItemClick.Priority.Default);
         remove => _communicator.ChangedItemClick.Unsubscribe(new Action<MouseButton, object?>(value!));
     }
 
@@ -255,15 +246,16 @@ public class PenumbraApi : IDisposable, IPenumbraApi
         if (!Enum.IsDefined(tab))
             return PenumbraApiEc.InvalidArgument;
 
-        if (tab != TabType.None)
-            _configWindow.SelectTab(tab);
-
         if (tab == TabType.Mods && (modDirectory.Length > 0 || modName.Length > 0))
         {
             if (_modManager.TryGetMod(modDirectory, modName, out var mod))
-                _configWindow.SelectMod(mod);
+                _communicator.SelectTab.Invoke(tab, mod);
             else
                 return PenumbraApiEc.ModMissing;
+        }
+        else if (tab != TabType.None)
+        {
+            _communicator.SelectTab.Invoke(tab);
         }
 
         return PenumbraApiEc.Success;
@@ -644,6 +636,9 @@ public class PenumbraApi : IDisposable, IPenumbraApi
             return PenumbraApiEc.FileMissing;
 
         _modManager.AddMod(dir);
+        if (_config.UseFileSystemCompression)
+            new FileCompactor(Penumbra.Log).StartMassCompact(dir.EnumerateFiles("*.*", SearchOption.AllDirectories),
+                CompressionAlgorithm.Xpress8K);
         return PenumbraApiEc.Success;
     }
 
@@ -988,6 +983,76 @@ public class PenumbraApi : IDisposable, IPenumbraApi
         return Functions.ToCompressedBase64(set, MetaManipulation.CurrentVersion);
     }
 
+    public Task ConvertTextureFile(string inputFile, string outputFile, TextureType textureType, bool mipMaps)
+        => textureType switch
+        {
+            TextureType.Png     => _textureManager.SavePng(inputFile, outputFile),
+            TextureType.AsIsTex => _textureManager.SaveAs(CombinedTexture.TextureSaveType.AsIs,   mipMaps, true,  inputFile, outputFile),
+            TextureType.AsIsDds => _textureManager.SaveAs(CombinedTexture.TextureSaveType.AsIs,   mipMaps, false, inputFile, outputFile),
+            TextureType.RgbaTex => _textureManager.SaveAs(CombinedTexture.TextureSaveType.Bitmap, mipMaps, true,  inputFile, outputFile),
+            TextureType.RgbaDds => _textureManager.SaveAs(CombinedTexture.TextureSaveType.Bitmap, mipMaps, false, inputFile, outputFile),
+            TextureType.Bc3Tex  => _textureManager.SaveAs(CombinedTexture.TextureSaveType.BC3,    mipMaps, true,  inputFile, outputFile),
+            TextureType.Bc3Dds  => _textureManager.SaveAs(CombinedTexture.TextureSaveType.BC3,    mipMaps, false, inputFile, outputFile),
+            TextureType.Bc7Tex  => _textureManager.SaveAs(CombinedTexture.TextureSaveType.BC7,    mipMaps, true,  inputFile, outputFile),
+            TextureType.Bc7Dds  => _textureManager.SaveAs(CombinedTexture.TextureSaveType.BC7,    mipMaps, false, inputFile, outputFile),
+            _                   => Task.FromException(new Exception($"Invalid input value {textureType}.")),
+        };
+
+    // @formatter:off
+    public Task ConvertTextureData(byte[] rgbaData, int width, string outputFile, TextureType textureType, bool mipMaps)
+        => textureType switch
+        {
+            TextureType.Png     => _textureManager.SavePng(new BaseImage(), outputFile, rgbaData, width, rgbaData.Length / 4 / width),
+            TextureType.AsIsTex => _textureManager.SaveAs(CombinedTexture.TextureSaveType.AsIs,   mipMaps, true,  new BaseImage(), outputFile, rgbaData, width, rgbaData.Length / 4 / width),
+            TextureType.AsIsDds => _textureManager.SaveAs(CombinedTexture.TextureSaveType.AsIs,   mipMaps, false, new BaseImage(), outputFile, rgbaData, width, rgbaData.Length / 4 / width),
+            TextureType.RgbaTex => _textureManager.SaveAs(CombinedTexture.TextureSaveType.Bitmap, mipMaps, true,  new BaseImage(), outputFile, rgbaData, width, rgbaData.Length / 4 / width),
+            TextureType.RgbaDds => _textureManager.SaveAs(CombinedTexture.TextureSaveType.Bitmap, mipMaps, false, new BaseImage(), outputFile, rgbaData, width, rgbaData.Length / 4 / width),
+            TextureType.Bc3Tex  => _textureManager.SaveAs(CombinedTexture.TextureSaveType.BC3,    mipMaps, true,  new BaseImage(), outputFile, rgbaData, width, rgbaData.Length / 4 / width),
+            TextureType.Bc3Dds  => _textureManager.SaveAs(CombinedTexture.TextureSaveType.BC3,    mipMaps, false, new BaseImage(), outputFile, rgbaData, width, rgbaData.Length / 4 / width),
+            TextureType.Bc7Tex  => _textureManager.SaveAs(CombinedTexture.TextureSaveType.BC7,    mipMaps, true,  new BaseImage(), outputFile, rgbaData, width, rgbaData.Length / 4 / width),
+            TextureType.Bc7Dds  => _textureManager.SaveAs(CombinedTexture.TextureSaveType.BC7,    mipMaps, false, new BaseImage(), outputFile, rgbaData, width, rgbaData.Length / 4 / width),
+            _                   => Task.FromException(new Exception($"Invalid input value {textureType}.")),
+        };
+    // @formatter:on
+
+    public IReadOnlyDictionary<string, string[]>?[] GetGameObjectResourcePaths(ushort[] gameObjects)
+    {
+        var characters       = gameObjects.Select(index => _dalamud.Objects[index]).OfType<Character>();
+        var resourceTrees    = _resourceTreeFactory.FromCharacters(characters, 0);
+        var pathDictionaries = ResourceTreeApiHelper.GetResourcePathDictionaries(resourceTrees);
+
+        return Array.ConvertAll(gameObjects, obj => pathDictionaries.TryGetValue(obj, out var pathDict) ? pathDict : null);
+    }
+
+    public IReadOnlyDictionary<ushort, IReadOnlyDictionary<string, string[]>> GetPlayerResourcePaths()
+    {
+        var resourceTrees    = _resourceTreeFactory.FromObjectTable(ResourceTreeFactory.Flags.LocalPlayerRelatedOnly);
+        var pathDictionaries = ResourceTreeApiHelper.GetResourcePathDictionaries(resourceTrees);
+
+        return pathDictionaries.AsReadOnly();
+    }
+
+    public IReadOnlyDictionary<nint, (string, string, ChangedItemIcon)>?[] GetGameObjectResourcesOfType(ResourceType type, bool withUIData,
+        params ushort[] gameObjects)
+    {
+        var characters      = gameObjects.Select(index => _dalamud.Objects[index]).OfType<Character>();
+        var resourceTrees   = _resourceTreeFactory.FromCharacters(characters, withUIData ? ResourceTreeFactory.Flags.WithUiData : 0);
+        var resDictionaries = ResourceTreeApiHelper.GetResourcesOfType(resourceTrees, type);
+
+        return Array.ConvertAll(gameObjects, obj => resDictionaries.TryGetValue(obj, out var resDict) ? resDict : null);
+    }
+
+    public IReadOnlyDictionary<ushort, IReadOnlyDictionary<nint, (string, string, ChangedItemIcon)>> GetPlayerResourcesOfType(ResourceType type,
+        bool withUIData)
+    {
+        var resourceTrees = _resourceTreeFactory.FromObjectTable(ResourceTreeFactory.Flags.LocalPlayerRelatedOnly
+          | (withUIData ? ResourceTreeFactory.Flags.WithUiData : 0));
+        var resDictionaries = ResourceTreeApiHelper.GetResourcesOfType(resourceTrees, type);
+
+        return resDictionaries.AsReadOnly();
+    }
+
+
     // TODO: cleanup when incrementing API
     public string GetMetaManipulations(string characterName)
         => GetMetaManipulations(characterName, ushort.MaxValue);
@@ -1120,13 +1185,14 @@ public class PenumbraApi : IDisposable, IPenumbraApi
         }
 
         manips = new HashSet<MetaManipulation>(manipArray!.Length);
-        foreach (var manip in manipArray.Where(m => m.ManipulationType != MetaManipulation.Type.Unknown))
+        foreach (var manip in manipArray.Where(m => m.Validate()))
         {
-            if (!manips.Add(manip))
-            {
-                manips = null;
-                return false;
-            }
+            if (manips.Add(manip))
+                continue;
+
+            Penumbra.Log.Warning($"Manipulation {manip} {manip.EntryToString()} is invalid and was skipped.");
+            manips = null;
+            return false;
         }
 
         return true;
@@ -1145,4 +1211,7 @@ public class PenumbraApi : IDisposable, IPenumbraApi
 
     private void OnModSettingChange(ModCollection collection, ModSettingChange type, Mod? mod, int _1, int _2, bool inherited)
         => ModSettingChanged?.Invoke(type, collection.Name, mod?.ModPath.Name ?? string.Empty, inherited);
+
+    private void OnCreatedCharacterBase(nint gameObject, ModCollection collection, nint drawObject)
+        => CreatedCharacterBase?.Invoke(gameObject, collection.Name, drawObject);
 }

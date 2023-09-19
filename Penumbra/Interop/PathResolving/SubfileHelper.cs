@@ -1,16 +1,12 @@
-using System;
-using System.Collections;
-using System.Collections.Concurrent;
-using System.Collections.Generic;
-using System.Threading;
 using Dalamud.Hooking;
 using Dalamud.Utility.Signatures;
+using Penumbra.Api.Enums;
 using Penumbra.Collections;
 using Penumbra.GameData;
-using Penumbra.GameData.Enums;
 using Penumbra.Interop.ResourceLoading;
 using Penumbra.Interop.Services;
 using Penumbra.Interop.Structs;
+using Penumbra.Services;
 using Penumbra.String;
 using Penumbra.String.Classes;
 using Penumbra.Util;
@@ -24,22 +20,24 @@ namespace Penumbra.Interop.PathResolving;
 /// </summary>
 public unsafe class SubfileHelper : IDisposable, IReadOnlyCollection<KeyValuePair<nint, ResolveData>>
 {
-    private readonly PerformanceTracker _performance;
-    private readonly ResourceLoader     _loader;
-    private readonly GameEventManager   _events;
+    private readonly PerformanceTracker  _performance;
+    private readonly ResourceLoader      _loader;
+    private readonly GameEventManager    _events;
+    private readonly CommunicatorService _communicator;
 
     private readonly ThreadLocal<ResolveData> _mtrlData = new(() => ResolveData.Invalid);
     private readonly ThreadLocal<ResolveData> _avfxData = new(() => ResolveData.Invalid);
 
     private readonly ConcurrentDictionary<nint, ResolveData> _subFileCollection = new();
 
-    public SubfileHelper(PerformanceTracker performance, ResourceLoader loader, GameEventManager events)
+    public SubfileHelper(PerformanceTracker performance, ResourceLoader loader, GameEventManager events, CommunicatorService communicator)
     {
         SignatureHelper.Initialise(this);
 
-        _performance = performance;
-        _loader      = loader;
-        _events      = events;
+        _performance  = performance;
+        _loader       = loader;
+        _events       = events;
+        _communicator = communicator;
 
         _loadMtrlShpkHook.Enable();
         _loadMtrlTexHook.Enable();
@@ -85,7 +83,7 @@ public unsafe class SubfileHelper : IDisposable, IReadOnlyCollection<KeyValuePai
         return false;
     }
 
-    /// <summary> Materials and AVFX need to be set per collection so they can load their textures independently from each other. </summary>
+    /// <summary> Materials, TMB, and AVFX need to be set per collection so they can load their sub files independently from each other. </summary>
     public static void HandleCollection(ResolveData resolveData, ByteString path, bool nonDefault, ResourceType type, FullPath? resolved,
         out (FullPath?, ResolveData) data)
     {
@@ -94,6 +92,7 @@ public unsafe class SubfileHelper : IDisposable, IReadOnlyCollection<KeyValuePai
             {
                 case ResourceType.Mtrl:
                 case ResourceType.Avfx:
+                case ResourceType.Tmb:
                     var fullPath = new FullPath($"|{resolveData.ModCollection.Name}_{resolveData.ModCollection.ChangeCounter}|{path}");
                     data = (fullPath, resolveData);
                     return;
@@ -150,9 +149,11 @@ public unsafe class SubfileHelper : IDisposable, IReadOnlyCollection<KeyValuePai
     {
         using var performance = _performance.Measure(PerformanceType.LoadShaders);
         var       last        = _mtrlData.Value;
-        _mtrlData.Value = LoadFileHelper(mtrlResourceHandle);
+        var       mtrlData    = LoadFileHelper(mtrlResourceHandle);
+        _mtrlData.Value = mtrlData;
         var ret = _loadMtrlShpkHook.Original(mtrlResourceHandle);
         _mtrlData.Value = last;
+        _communicator.MtrlShpkLoaded.Invoke(mtrlResourceHandle, mtrlData.AssociatedGameObject);
         return ret;
     }
 

@@ -1,8 +1,3 @@
-using System;
-using System.Collections.Generic;
-using System.Diagnostics;
-using System.IO;
-using System.Numerics;
 using Dalamud.Interface;
 using Dalamud.Interface.Components;
 using Dalamud.Interface.Internal.Notifications;
@@ -12,7 +7,9 @@ using OtterGui.Raii;
 using OtterGui.Widgets;
 using Penumbra.Api.Enums;
 using Penumbra.Mods;
+using Penumbra.Mods.Editor;
 using Penumbra.Mods.Manager;
+using Penumbra.Mods.Subclasses;
 using Penumbra.Services;
 using Penumbra.UI.AdvancedWindow;
 
@@ -28,6 +25,7 @@ public class ModPanelEditTab : ITab
     private readonly ModFileSystemSelector _selector;
     private readonly ModEditWindow         _editWindow;
     private readonly ModEditor             _editor;
+    private readonly Configuration         _config;
 
     private readonly TagButtons _modTags = new();
 
@@ -37,7 +35,7 @@ public class ModPanelEditTab : ITab
     private Mod                _mod         = null!;
 
     public ModPanelEditTab(ModManager modManager, ModFileSystemSelector selector, ModFileSystem fileSystem, ChatService chat,
-        ModEditWindow editWindow, ModEditor editor, FilenameService filenames, ModExportManager modExportManager)
+        ModEditWindow editWindow, ModEditor editor, FilenameService filenames, ModExportManager modExportManager, Configuration config)
     {
         _modManager       = modManager;
         _selector         = selector;
@@ -47,6 +45,7 @@ public class ModPanelEditTab : ITab
         _editor           = editor;
         _filenames        = filenames;
         _modExportManager = modExportManager;
+        _config           = config;
     }
 
     public ReadOnlySpan<byte> Label
@@ -136,7 +135,7 @@ public class ModPanelEditTab : ITab
             _editor.LoadMod(_mod);
             _editor.MdlMaterialEditor.ReplaceAllMaterials("bibo",     "b");
             _editor.MdlMaterialEditor.ReplaceAllMaterials("bibopube", "c");
-            _editor.MdlMaterialEditor.SaveAllModels();
+            _editor.MdlMaterialEditor.SaveAllModels(_editor.Compactor);
             _editWindow.UpdateModels();
         }
 
@@ -160,17 +159,27 @@ public class ModPanelEditTab : ITab
 
         ImGui.SameLine();
         tt = backup.Exists
-            ? $"Delete existing mod export \"{backup.Name}\"."
+            ? $"Delete existing mod export \"{backup.Name}\" (hold {_config.DeleteModModifier} while clicking)."
             : $"Exported mod \"{backup.Name}\" does not exist.";
-        if (ImGuiUtil.DrawDisabledButton("Delete Export", buttonSize, tt, !backup.Exists))
+        if (ImGuiUtil.DrawDisabledButton("Delete Export", buttonSize, tt, !backup.Exists || !_config.DeleteModModifier.IsActive()))
             backup.Delete();
 
         tt = backup.Exists
-            ? $"Restore mod from exported file \"{backup.Name}\"."
+            ? $"Restore mod from exported file \"{backup.Name}\" (hold {_config.DeleteModModifier} while clicking)."
             : $"Exported mod \"{backup.Name}\" does not exist.";
         ImGui.SameLine();
-        if (ImGuiUtil.DrawDisabledButton("Restore From Export", buttonSize, tt, !backup.Exists))
+        if (ImGuiUtil.DrawDisabledButton("Restore From Export", buttonSize, tt, !backup.Exists || !_config.DeleteModModifier.IsActive()))
             backup.Restore(_modManager);
+        if (backup.Exists)
+        {
+            ImGui.SameLine();
+            using (var font = ImRaii.PushFont(UiBuilder.IconFont))
+            {
+                ImGui.TextUnformatted(FontAwesomeIcon.CheckCircle.ToIconString());
+            }
+
+            ImGuiUtil.HoverTooltip($"Export exists in \"{backup.Name}\".");
+        }
     }
 
     /// <summary> Anything about editing the regular meta information about the mod. </summary>
@@ -194,7 +203,7 @@ public class ModPanelEditTab : ITab
 
         var reducedSize = new Vector2(UiHelpers.InputTextMinusButton3, 0);
         if (ImGui.Button("Edit Description", reducedSize))
-            _delayedActions.Enqueue(() => DescriptionEdit.OpenPopup(_filenames, _mod, Input.Description));
+            _delayedActions.Enqueue(() => DescriptionEdit.OpenPopup(_mod, Input.Description));
 
         ImGui.SameLine();
         var fileExists = File.Exists(_filenames.ModMetaPath(_mod));
@@ -303,16 +312,15 @@ public class ModPanelEditTab : ITab
     /// <summary> Open a popup to edit a multi-line mod or option description. </summary>
     private static class DescriptionEdit
     {
-        private const  string           PopupName                = "Edit Description";
-        private static string           _newDescription          = string.Empty;
-        private static int              _newDescriptionIdx       = -1;
-        private static int              _newDescriptionOptionIdx = -1;
-        private static Mod?             _mod;
-        private static FilenameService? _fileNames;
+        private const  string PopupName                = "Edit Description";
+        private static string _newDescription          = string.Empty;
+        private static string _oldDescription          = string.Empty;
+        private static int    _newDescriptionIdx       = -1;
+        private static int    _newDescriptionOptionIdx = -1;
+        private static Mod?   _mod;
 
-        public static void OpenPopup(FilenameService filenames, Mod mod, int groupIdx, int optionIdx = -1)
+        public static void OpenPopup(Mod mod, int groupIdx, int optionIdx = -1)
         {
-            _fileNames               = filenames;
             _newDescriptionIdx       = groupIdx;
             _newDescriptionOptionIdx = optionIdx;
             _newDescription = groupIdx < 0
@@ -320,6 +328,7 @@ public class ModPanelEditTab : ITab
                 : optionIdx < 0
                     ? mod.Groups[groupIdx].Description
                     : mod.Groups[groupIdx][optionIdx].Description;
+            _oldDescription = _newDescription;
 
             _mod = mod;
             ImGui.OpenPopup(PopupName);
@@ -346,11 +355,7 @@ public class ModPanelEditTab : ITab
               + ImGui.GetStyle().ItemSpacing.X;
             ImGui.SetCursorPosX((800 * UiHelpers.Scale - width) / 2);
 
-            var oldDescription = _newDescriptionIdx == Input.Description
-                ? _mod.Description
-                : _mod.Groups[_newDescriptionIdx].Description;
-
-            var tooltip = _newDescription != oldDescription ? string.Empty : "No changes made yet.";
+            var tooltip = _newDescription != _oldDescription ? string.Empty : "No changes made yet.";
 
             if (ImGuiUtil.DrawDisabledButton("Save", buttonSize, tooltip, tooltip.Length > 0))
             {
@@ -428,7 +433,7 @@ public class ModPanelEditTab : ITab
 
         if (ImGuiUtil.DrawDisabledButton(FontAwesomeIcon.Edit.ToIconString(), UiHelpers.IconButtonSize,
                 "Edit group description.", false, true))
-            _delayedActions.Enqueue(() => DescriptionEdit.OpenPopup(_filenames, _mod, groupIdx));
+            _delayedActions.Enqueue(() => DescriptionEdit.OpenPopup(_mod, groupIdx));
 
         ImGui.SameLine();
         var fileName   = _filenames.OptionGroupFile(_mod, groupIdx);
@@ -522,7 +527,7 @@ public class ModPanelEditTab : ITab
             ImGui.TableNextColumn();
             if (ImGuiUtil.DrawDisabledButton(FontAwesomeIcon.Edit.ToIconString(), UiHelpers.IconButtonSize, "Edit option description.",
                     false, true))
-                panel._delayedActions.Enqueue(() => DescriptionEdit.OpenPopup(panel._filenames, panel._mod, groupIdx, optionIdx));
+                panel._delayedActions.Enqueue(() => DescriptionEdit.OpenPopup(panel._mod, groupIdx, optionIdx));
 
             ImGui.TableNextColumn();
             if (ImGuiUtil.DrawDisabledButton(FontAwesomeIcon.Trash.ToIconString(), UiHelpers.IconButtonSize,

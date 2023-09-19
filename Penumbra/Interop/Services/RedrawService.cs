@@ -1,18 +1,15 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
 using Dalamud.Game;
 using Dalamud.Game.ClientState.Conditions;
 using Dalamud.Game.ClientState.Objects;
 using Dalamud.Game.ClientState.Objects.Enums;
 using Dalamud.Game.ClientState.Objects.SubKinds;
 using Dalamud.Game.ClientState.Objects.Types;
+using Dalamud.Plugin.Services;
 using Penumbra.Api;
 using Penumbra.Api.Enums;
 using Penumbra.GameData;
 using Penumbra.GameData.Actors;
 using Penumbra.Interop.Structs;
-using Penumbra.Services;
 
 namespace Penumbra.Interop.Services;
 
@@ -103,10 +100,10 @@ public unsafe partial class RedrawService
 
 public sealed unsafe partial class RedrawService : IDisposable
 {
-    private readonly Framework     _framework;
-    private readonly ObjectTable   _objects;
-    private readonly TargetManager _targets;
-    private readonly Condition     _conditions;
+    private readonly Framework      _framework;
+    private readonly IObjectTable   _objects;
+    private readonly ITargetManager _targets;
+    private readonly Condition      _conditions;
 
     private readonly List<int> _queue           = new(100);
     private readonly List<int> _afterGPoseQueue = new(GPoseSlots);
@@ -114,7 +111,7 @@ public sealed unsafe partial class RedrawService : IDisposable
 
     public event GameObjectRedrawnDelegate? GameObjectRedrawn;
 
-    public RedrawService(Framework framework, ObjectTable objects, TargetManager targets, Condition conditions)
+    public RedrawService(Framework framework, IObjectTable objects, ITargetManager targets, Condition conditions)
     {
         _framework        =  framework;
         _objects          =  objects;
@@ -209,8 +206,8 @@ public sealed unsafe partial class RedrawService : IDisposable
         if (actor == null || _targets.Target != null)
             return;
 
-        _targets.SetTarget(actor);
-        _target = -1;
+        _targets.Target = actor;
+        _target         = -1;
     }
 
     private void HandleRedraw()

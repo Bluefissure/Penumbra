@@ -1,10 +1,16 @@
-using System;
+using OtterGui.Classes;
+using OtterGui.Log;
 using Penumbra.Communication;
 
 namespace Penumbra.Services;
 
 public class CommunicatorService : IDisposable
 {
+    public CommunicatorService(Logger logger)
+    {
+        EventWrapper.ChangeLogger(logger);
+    }
+
     /// <inheritdoc cref="Communication.CollectionChange"/>
     public readonly CollectionChange CollectionChange = new();
 
@@ -16,6 +22,9 @@ public class CommunicatorService : IDisposable
 
     /// <inheritdoc cref="Communication.CreatedCharacterBase"/>
     public readonly CreatedCharacterBase CreatedCharacterBase = new();
+
+    /// <inheritdoc cref="Communication.MtrlShpkLoaded"/>
+    public readonly MtrlShpkLoaded MtrlShpkLoaded = new();
 
     /// <inheritdoc cref="Communication.ModDataChanged"/>
     public readonly ModDataChanged ModDataChanged = new();
@@ -56,12 +65,19 @@ public class CommunicatorService : IDisposable
     /// <inheritdoc cref="Communication.ChangedItemClick"/>
     public readonly ChangedItemClick ChangedItemClick = new();
 
+    /// <inheritdoc cref="Communication.SelectTab"/>
+    public readonly SelectTab SelectTab = new();
+
+    /// <inheritdoc cref="Communication.ResolvedFileChanged"/>
+    public readonly ResolvedFileChanged ResolvedFileChanged = new();
+
     public void Dispose()
     {
         CollectionChange.Dispose();
         TemporaryGlobalModChange.Dispose();
         CreatingCharacterBase.Dispose();
         CreatedCharacterBase.Dispose();
+        MtrlShpkLoaded.Dispose();
         ModDataChanged.Dispose();
         ModOptionChanged.Dispose();
         ModDiscoveryStarted.Dispose();
@@ -75,5 +91,7 @@ public class CommunicatorService : IDisposable
         PostSettingsPanelDraw.Dispose();
         ChangedItemHover.Dispose();
         ChangedItemClick.Dispose();
+        SelectTab.Dispose();
+        ResolvedFileChanged.Dispose();
     }
 }

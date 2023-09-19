@@ -1,8 +1,8 @@
-using System;
+using OtterGui.Classes;
+using Penumbra.Api;
 using Penumbra.Api.Enums;
 using Penumbra.Collections;
 using Penumbra.Mods;
-using Penumbra.Util;
 
 namespace Penumbra.Communication;
 
@@ -21,7 +21,7 @@ public sealed class ModSettingChanged : EventWrapper<Action<ModCollection, ModSe
 {
     public enum Priority
     {
-        /// <seealso cref="Api.PenumbraApi.OnModSettingChange"/>
+        /// <seealso cref="PenumbraApi.OnModSettingChange"/>
         Api = int.MinValue,
 
         /// <seealso cref="Collections.Cache.CollectionCacheManager.OnModSettingChange"/>

@@ -1,15 +1,9 @@
-using System;
-using System.Collections;
-using System.Linq;
-using Dalamud.Data;
-using Dalamud.Game.ClientState;
-using Dalamud.Game.Gui;
+using Dalamud.Plugin.Services;
 using FFXIVClientStructs.FFXIV.Client.Graphics.Scene;
-using Lumina.Excel.GeneratedSheets;
-using OtterGui;
 using Penumbra.Collections;
 using Penumbra.Collections.Manager;
 using Penumbra.GameData.Actors;
+using Penumbra.GameData.Data;
 using Penumbra.GameData.Enums;
 using Penumbra.Services;
 using Penumbra.Util;
@@ -23,10 +17,10 @@ public unsafe class CollectionResolver
 {
     private readonly PerformanceTracker        _performance;
     private readonly IdentifiedCollectionCache _cache;
-    private readonly BitArray                  _validHumanModels;
+    private readonly HumanModelList            _humanModels;
 
-    private readonly ClientState     _clientState;
-    private readonly GameGui         _gameGui;
+    private readonly IClientState    _clientState;
+    private readonly IGameGui        _gameGui;
     private readonly ActorService    _actors;
     private readonly CutsceneService _cutscenes;
 
@@ -35,9 +29,9 @@ public unsafe class CollectionResolver
     private readonly TempCollectionManager _tempCollections;
     private readonly DrawObjectState       _drawObjectState;
 
-    public CollectionResolver(PerformanceTracker performance, IdentifiedCollectionCache cache, ClientState clientState, GameGui gameGui,
-        DataManager gameData, ActorService actors, CutsceneService cutscenes, Configuration config, CollectionManager collectionManager,
-        TempCollectionManager tempCollections, DrawObjectState drawObjectState)
+    public CollectionResolver(PerformanceTracker performance, IdentifiedCollectionCache cache, IClientState clientState, IGameGui gameGui,
+        ActorService actors, CutsceneService cutscenes, Configuration config, CollectionManager collectionManager,
+        TempCollectionManager tempCollections, DrawObjectState drawObjectState, HumanModelList humanModels)
     {
         _performance       = performance;
         _cache             = cache;
@@ -49,7 +43,7 @@ public unsafe class CollectionResolver
         _collectionManager = collectionManager;
         _tempCollections   = tempCollections;
         _drawObjectState   = drawObjectState;
-        _validHumanModels  = GetValidHumanModels(gameData);
+        _humanModels       = humanModels;
     }
 
     /// <summary>
@@ -115,11 +109,11 @@ public unsafe class CollectionResolver
 
     /// <summary> Return whether the given ModelChara id refers to a human-type model. </summary>
     public bool IsModelHuman(uint modelCharaId)
-        => modelCharaId < _validHumanModels.Length && _validHumanModels[(int)modelCharaId];
+        => _humanModels.IsHuman(modelCharaId);
 
     /// <summary> Return whether the given character has a human model. </summary>
     public bool IsModelHuman(Character* character)
-        => character != null && IsModelHuman((uint)character->ModelCharaId);
+        => character != null && IsModelHuman((uint)character->CharacterData.ModelCharaId);
 
     /// <summary>
     /// Used if on the Login screen. Names are populated after actors are drawn,
@@ -213,16 +207,16 @@ public unsafe class CollectionResolver
 
         // Only handle human models.
         var character = (Character*)actor;
-        if (!IsModelHuman((uint)character->ModelCharaId))
+        if (!IsModelHuman((uint)character->CharacterData.ModelCharaId))
             return null;
 
-        if (character->CustomizeData[0] == 0)
+        if (character->DrawData.CustomizeData[0] == 0)
         {
             notYetReady = true;
             return null;
         }
 
-        var bodyType = character->CustomizeData[2];
+        var bodyType = character->DrawData.CustomizeData[2];
         var collection = bodyType switch
         {
             3 => _collectionManager.Active.ByType(CollectionType.NonPlayerElderly),
@@ -232,8 +226,8 @@ public unsafe class CollectionResolver
         if (collection != null)
             return collection;
 
-        var race   = (SubRace)character->CustomizeData[4];
-        var gender = (Gender)(character->CustomizeData[1] + 1);
+        var race   = (SubRace)character->DrawData.CustomizeData[4];
+        var gender = (Gender)(character->DrawData.CustomizeData[1] + 1);
         var isNpc  = actor->ObjectKind != (byte)ObjectKind.Player;
 
         var type = CollectionTypeExtensions.FromParts(race, gender, isNpc);
@@ -248,23 +242,10 @@ public unsafe class CollectionResolver
         if (identifier.Type != IdentifierType.Owned || !_config.UseOwnerNameForCharacterCollection || owner == null)
             return null;
 
-        var id = _actors.AwaitedService.CreateIndividualUnchecked(IdentifierType.Player, identifier.PlayerName, identifier.HomeWorld,
+        var id = _actors.AwaitedService.CreateIndividualUnchecked(IdentifierType.Player, identifier.PlayerName, identifier.HomeWorld.Id,
             ObjectKind.None,
             uint.MaxValue);
         return CheckYourself(id, owner)
          ?? CollectionByAttributes(owner, ref notYetReady);
-    }
-
-    /// <summary>
-    /// Go through all ModelChara rows and return a bitfield of those that resolve to human models.
-    /// </summary>
-    private static BitArray GetValidHumanModels(DataManager gameData)
-    {
-        var sheet = gameData.GetExcelSheet<ModelChara>()!;
-        var ret   = new BitArray((int)sheet.RowCount, false);
-        foreach (var (_, idx) in sheet.WithIndex().Where(p => p.Value.Type == (byte)CharacterBase.ModelType.Human))
-            ret[idx] = true;
-
-        return ret;
     }
 }

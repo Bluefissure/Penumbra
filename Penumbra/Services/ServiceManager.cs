@@ -1,13 +1,14 @@
-using System.Collections.Concurrent;
 using Dalamud.Plugin;
 using Microsoft.Extensions.DependencyInjection;
 using OtterGui.Classes;
+using OtterGui.Compression;
 using OtterGui.Log;
 using Penumbra.Api;
 using Penumbra.Collections.Cache;
 using Penumbra.Collections.Manager;
 using Penumbra.GameData;
 using Penumbra.GameData.Data;
+using Penumbra.Import.Textures;
 using Penumbra.Interop.PathResolving;
 using Penumbra.Interop.ResourceLoading;
 using Penumbra.Interop.ResourceTree;
@@ -20,6 +21,7 @@ using Penumbra.UI;
 using Penumbra.UI.AdvancedWindow;
 using Penumbra.UI.Classes;
 using Penumbra.UI.ModsTab;
+using Penumbra.UI.ResourceWatcher;
 using Penumbra.UI.Tabs;
 
 namespace Penumbra.Services;
@@ -62,7 +64,8 @@ public static class ServiceManager
             .AddSingleton<BackupService>()
             .AddSingleton<CommunicatorService>()
             .AddSingleton<ChatService>()
-            .AddSingleton<SaveService>();
+            .AddSingleton<SaveService>()
+            .AddSingleton<FileCompactor>();
 
 
     private static IServiceCollection AddGameData(this IServiceCollection services)
@@ -70,7 +73,8 @@ public static class ServiceManager
             .AddSingleton<IdentifierService>()
             .AddSingleton<StainService>()
             .AddSingleton<ItemService>()
-            .AddSingleton<ActorService>();
+            .AddSingleton<ActorService>()
+            .AddSingleton<HumanModelList>();
 
     private static IServiceCollection AddInterop(this IServiceCollection services)
         => services.AddSingleton<GameEventManager>()
@@ -116,7 +120,8 @@ public static class ServiceManager
         => services.AddSingleton<ResourceLoader>()
             .AddSingleton<ResourceWatcher>()
             .AddSingleton<ResourceTreeFactory>()
-            .AddSingleton<MetaFileManager>();
+            .AddSingleton<MetaFileManager>()
+            .AddSingleton<SkinFixer>();
 
     private static IServiceCollection AddResolvers(this IServiceCollection services)
         => services.AddSingleton<AnimationHookService>()
@@ -161,7 +166,8 @@ public static class ServiceManager
             .AddSingleton<ConfigTabBar>()
             .AddSingleton<ResourceWatcher>()
             .AddSingleton<ItemSwapTab>()
-            .AddSingleton<ModMergeTab>();
+            .AddSingleton<ModMergeTab>()
+            .AddSingleton<ChangedItemDrawer>();
 
     private static IServiceCollection AddModEditor(this IServiceCollection services)
         => services.AddSingleton<ModFileCollection>()
@@ -172,11 +178,13 @@ public static class ServiceManager
             .AddSingleton<ModSwapEditor>()
             .AddSingleton<ModNormalizer>()
             .AddSingleton<ModMerger>()
-            .AddSingleton<ModEditor>();
+            .AddSingleton<ModEditor>()
+            .AddSingleton<TextureManager>();
 
     private static IServiceCollection AddApi(this IServiceCollection services)
         => services.AddSingleton<PenumbraApi>()
             .AddSingleton<IPenumbraApi>(x => x.GetRequiredService<PenumbraApi>())
             .AddSingleton<PenumbraIpcProviders>()
-            .AddSingleton<HttpApi>();
+            .AddSingleton<HttpApi>()
+            .AddSingleton<DalamudSubstitutionProvider>();
 }

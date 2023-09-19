@@ -1,5 +1,4 @@
-using System;
-using Penumbra.Util;
+using OtterGui.Classes;
 
 namespace Penumbra.Communication;
 
@@ -15,6 +14,9 @@ public sealed class ChangedItemHover : EventWrapper<Action<object?>, ChangedItem
     {
         /// <seealso cref="Api.PenumbraApi.ChangedItemTooltip"/>
         Default = 0,
+
+        /// <seealso cref="Penumbra.SetupApi"/>
+        Link = 1,
     }
 
     public ChangedItemHover()

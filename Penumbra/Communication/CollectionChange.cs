@@ -1,7 +1,6 @@
-using System;
+using OtterGui.Classes;
 using Penumbra.Collections;
 using Penumbra.Collections.Manager;
-using Penumbra.Util;
 
 namespace Penumbra.Communication;
 
@@ -17,6 +16,9 @@ public sealed class CollectionChange : EventWrapper<Action<CollectionType, ModCo
 {
     public enum Priority
     {
+        /// <seealso cref="Api.DalamudSubstitutionProvider.OnCollectionChange"/>
+        DalamudSubstitutionProvider = -3,
+
         /// <seealso cref="Collections.Cache.CollectionCacheManager.OnCollectionChange"/>
         CollectionCacheManager = -2,
 

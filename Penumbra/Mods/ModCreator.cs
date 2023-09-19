@@ -1,7 +1,3 @@
-using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
 using Dalamud.Interface.Internal.Notifications;
@@ -15,9 +11,9 @@ using Penumbra.Import;
 using Penumbra.Import.Structs;
 using Penumbra.Meta;
 using Penumbra.Mods.Manager;
+using Penumbra.Mods.Subclasses;
 using Penumbra.Services;
 using Penumbra.String.Classes;
-using Penumbra.Util;
 
 namespace Penumbra.Mods;
 
@@ -51,7 +47,7 @@ public partial class ModCreator
         }
         catch (Exception e)
         {
-            Penumbra.ChatService.NotificationMessage($"Could not create directory for new Mod {newName}:\n{e}", "Failure",
+            Penumbra.Chat.NotificationMessage($"Could not create directory for new Mod {newName}:\n{e}", "Failure",
                 NotificationType.Error);
             return null;
         }
@@ -117,7 +113,7 @@ public partial class ModCreator
         }
 
         if (changes)
-            _saveService.SaveAllOptionGroups(mod);
+            _saveService.SaveAllOptionGroups(mod, true);
     }
 
     /// <summary> Load the default option for a given mod.</summary>
@@ -182,7 +178,7 @@ public partial class ModCreator
         if (!changes)
             return;
 
-        _saveService.SaveAllOptionGroups(mod);
+        _saveService.SaveAllOptionGroups(mod, false);
         _saveService.ImmediateSave(new ModSaveGroup(mod.ModPath, mod.Default));
     }
 
@@ -332,7 +328,10 @@ public partial class ModCreator
 
     /// <summary> Return the name of a new valid directory based on the base directory and the given name. </summary>
     public static DirectoryInfo NewOptionDirectory(DirectoryInfo baseDir, string optionName)
-        => new(Path.Combine(baseDir.FullName, ReplaceBadXivSymbols(optionName)));
+    {
+        var option = ReplaceBadXivSymbols(optionName);
+        return new DirectoryInfo(Path.Combine(baseDir.FullName, option.Length > 0 ? option : "_"));
+    }
 
     /// <summary> Normalize for nicer names, and remove invalid symbols or invalid paths. </summary>
     public static string ReplaceBadXivSymbols(string s, string replacement = "_")

@@ -1,8 +1,6 @@
 using Dalamud.Game.ClientState.Objects.Types;
 using Dalamud.Plugin;
 using Penumbra.GameData.Enums;
-using System;
-using System.Collections.Generic;
 using Penumbra.Api.Enums;
 using Penumbra.Api.Helpers;
 using Penumbra.Collections.Manager;
@@ -105,6 +103,10 @@ public class PenumbraIpcProviders : IDisposable
     internal readonly EventProvider<ModSettingChange, string, string, bool>                              ModSettingChanged;
     internal readonly FuncProvider<string, string, string, PenumbraApiEc>                                CopyModSettings;
 
+    // Editing
+    internal readonly FuncProvider<string, string, TextureType, bool, Task>      ConvertTextureFile;
+    internal readonly FuncProvider<byte[], int, string, TextureType, bool, Task> ConvertTextureData;
+
     // Temporary
     internal readonly FuncProvider<string, string, bool, (PenumbraApiEc, string)>                          CreateTemporaryCollection;
     internal readonly FuncProvider<string, PenumbraApiEc>                                                  RemoveTemporaryCollection;
@@ -115,6 +117,12 @@ public class PenumbraIpcProviders : IDisposable
     internal readonly FuncProvider<string, string, Dictionary<string, string>, string, int, PenumbraApiEc> AddTemporaryMod;
     internal readonly FuncProvider<string, int, PenumbraApiEc>                                             RemoveTemporaryModAll;
     internal readonly FuncProvider<string, string, int, PenumbraApiEc>                                     RemoveTemporaryMod;
+
+    // Resource Tree
+    internal readonly FuncProvider<ushort[], IReadOnlyDictionary<string, string[]>?[]>                                                            GetGameObjectResourcePaths;
+    internal readonly FuncProvider<IReadOnlyDictionary<ushort, IReadOnlyDictionary<string, string[]>>>                                            GetPlayerResourcePaths;
+    internal readonly FuncProvider<ResourceType, bool, ushort[], IReadOnlyDictionary<nint, (string, string, ChangedItemIcon)>?[]>                 GetGameObjectResourcesOfType;
+    internal readonly FuncProvider<ResourceType, bool, IReadOnlyDictionary<ushort, IReadOnlyDictionary<nint, (string, string, ChangedItemIcon)>>> GetPlayerResourcesOfType;
 
     public PenumbraIpcProviders(DalamudServices dalamud, IPenumbraApi api, ModManager modManager, CollectionManager collections,
         TempModManager tempMods, TempCollectionManager tempCollections, SaveService saveService, Configuration config)
@@ -219,6 +227,10 @@ public class PenumbraIpcProviders : IDisposable
             () => Api.ModSettingChanged -= ModSettingChangedEvent);
         CopyModSettings = Ipc.CopyModSettings.Provider(pi, Api.CopyModSettings);
 
+        // Editing
+        ConvertTextureFile = Ipc.ConvertTextureFile.Provider(pi, Api.ConvertTextureFile);
+        ConvertTextureData = Ipc.ConvertTextureData.Provider(pi, Api.ConvertTextureData);
+
         // Temporary
         CreateTemporaryCollection       = Ipc.CreateTemporaryCollection.Provider(pi, Api.CreateTemporaryCollection);
         RemoveTemporaryCollection       = Ipc.RemoveTemporaryCollection.Provider(pi, Api.RemoveTemporaryCollection);
@@ -229,6 +241,12 @@ public class PenumbraIpcProviders : IDisposable
         AddTemporaryMod                 = Ipc.AddTemporaryMod.Provider(pi, Api.AddTemporaryMod);
         RemoveTemporaryModAll           = Ipc.RemoveTemporaryModAll.Provider(pi, Api.RemoveTemporaryModAll);
         RemoveTemporaryMod              = Ipc.RemoveTemporaryMod.Provider(pi, Api.RemoveTemporaryMod);
+
+        // ResourceTree
+        GetGameObjectResourcePaths   = Ipc.GetGameObjectResourcePaths.Provider(pi, Api.GetGameObjectResourcePaths);
+        GetPlayerResourcePaths       = Ipc.GetPlayerResourcePaths.Provider(pi, Api.GetPlayerResourcePaths);
+        GetGameObjectResourcesOfType = Ipc.GetGameObjectResourcesOfType.Provider(pi, Api.GetGameObjectResourcesOfType);
+        GetPlayerResourcesOfType     = Ipc.GetPlayerResourcesOfType.Provider(pi, Api.GetPlayerResourcesOfType);
 
         Tester = new IpcTester(config, dalamud, this, modManager, collections, tempMods, tempCollections, saveService);
 
@@ -334,6 +352,16 @@ public class PenumbraIpcProviders : IDisposable
         AddTemporaryMod.Dispose();
         RemoveTemporaryModAll.Dispose();
         RemoveTemporaryMod.Dispose();
+
+        // Editing
+        ConvertTextureFile.Dispose();
+        ConvertTextureData.Dispose();
+
+        // Resource Tree
+        GetGameObjectResourcePaths.Dispose();
+        GetPlayerResourcePaths.Dispose();
+        GetGameObjectResourcesOfType.Dispose();
+        GetPlayerResourcesOfType.Dispose();
 
         Disposed.Invoke();
         Disposed.Dispose();

@@ -1,6 +1,3 @@
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
 using OtterGui.Classes;
 using OtterGui.Log;
 using Penumbra.Util;
@@ -13,7 +10,7 @@ public class BackupService
     {
         using var t     = timer.Measure(StartTimeType.Backup);
         var       files = PenumbraFiles(fileNames);
-        Backup.CreateBackup(logger, new DirectoryInfo(fileNames.ConfigDirectory), files);
+        Backup.CreateAutomaticBackup(logger, new DirectoryInfo(fileNames.ConfigDirectory), files);
     }
 
     // Collect all relevant files for penumbra configuration.

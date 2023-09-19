@@ -1,33 +1,38 @@
-using System;
-using System.IO;
-using System.Linq;
-using System.Numerics;
 using Dalamud.Interface;
 using Dalamud.Interface.Windowing;
+using Dalamud.Utility;
 using FFXIVClientStructs.FFXIV.Client.Game.Character;
 using FFXIVClientStructs.FFXIV.Client.Game.Group;
 using FFXIVClientStructs.FFXIV.Client.Game.Object;
 using FFXIVClientStructs.FFXIV.Client.System.Resource;
+using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using ImGuiNET;
 using OtterGui;
+using OtterGui.Classes;
+using OtterGui.Raii;
 using OtterGui.Widgets;
 using Penumbra.Api;
 using Penumbra.Collections.Manager;
 using Penumbra.GameData.Actors;
 using Penumbra.GameData.Files;
 using Penumbra.Import.Structs;
+using Penumbra.Import.Textures;
 using Penumbra.Interop.ResourceLoading;
 using Penumbra.Interop.PathResolving;
 using Penumbra.Interop.Structs;
+using Penumbra.Mods;
 using Penumbra.Mods.Manager;
 using Penumbra.Services;
 using Penumbra.String;
+using Penumbra.UI.Classes;
 using Penumbra.Util;
 using static OtterGui.Raii.ImRaii;
 using CharacterBase = FFXIVClientStructs.FFXIV.Client.Graphics.Scene.CharacterBase;
 using CharacterUtility = Penumbra.Interop.Services.CharacterUtility;
 using ObjectKind = Dalamud.Game.ClientState.Objects.Enums.ObjectKind;
 using ResidentResourceManager = Penumbra.Interop.Services.ResidentResourceManager;
+using Penumbra.Interop.Services;
+using FFXIVClientStructs.FFXIV.Client.Graphics.Kernel;
 
 namespace Penumbra.UI.Tabs;
 
@@ -55,13 +60,18 @@ public class DebugTab : Window, ITab
     private readonly CutsceneService           _cutsceneService;
     private readonly ModImportManager          _modImporter;
     private readonly ImportPopup               _importPopup;
+    private readonly FrameworkManager          _framework;
+    private readonly TextureManager            _textureManager;
+    private readonly SkinFixer                 _skinFixer;
+    private readonly IdentifierService         _identifier;
 
     public DebugTab(StartTracker timer, PerformanceTracker performance, Configuration config, CollectionManager collectionManager,
         ValidityChecker validityChecker, ModManager modManager, HttpApi httpApi, ActorService actorService,
         DalamudServices dalamud, StainService stains, CharacterUtility characterUtility, ResidentResourceManager residentResources,
         ResourceManagerService resourceManager, PenumbraIpcProviders ipc, CollectionResolver collectionResolver,
         DrawObjectState drawObjectState, PathState pathState, SubfileHelper subfileHelper, IdentifiedCollectionCache identifiedCollectionCache,
-        CutsceneService cutsceneService, ModImportManager modImporter, ImportPopup importPopup)
+        CutsceneService cutsceneService, ModImportManager modImporter, ImportPopup importPopup, FrameworkManager framework,
+        TextureManager textureManager, SkinFixer skinFixer, IdentifierService identifier)
         : base("Penumbra Debug Window", ImGuiWindowFlags.NoCollapse, false)
     {
         IsOpen = true;
@@ -92,6 +102,10 @@ public class DebugTab : Window, ITab
         _cutsceneService           = cutsceneService;
         _modImporter               = modImporter;
         _importPopup               = importPopup;
+        _framework                 = framework;
+        _textureManager            = textureManager;
+        _skinFixer                 = skinFixer;
+        _identifier                = identifier;
     }
 
     public ReadOnlySpan<byte> Label
@@ -119,20 +133,63 @@ public class DebugTab : Window, ITab
         ImGui.NewLine();
         DrawActorsDebug();
         ImGui.NewLine();
+        DrawCollectionCaches();
+        ImGui.NewLine();
         DrawDebugCharacterUtility();
         ImGui.NewLine();
-        DrawStainTemplates();
+        DrawData();
         ImGui.NewLine();
         DrawDebugTabMetaLists();
-        ImGui.NewLine();
-        DrawDebugResidentResources();
         ImGui.NewLine();
         DrawResourceProblems();
         ImGui.NewLine();
         DrawPlayerModelInfo();
         ImGui.NewLine();
+        DrawGlobalVariableInfo();
+        ImGui.NewLine();
         DrawDebugTabIpc();
         ImGui.NewLine();
+    }
+
+
+    private void DrawCollectionCaches()
+    {
+        if (!ImGui.CollapsingHeader(
+                $"Collections ({_collectionManager.Caches.Count}/{_collectionManager.Storage.Count - 1} Caches)###Collections"))
+            return;
+
+        foreach (var collection in _collectionManager.Storage)
+        {
+            if (collection.HasCache)
+            {
+                using var color = PushColor(ImGuiCol.Text, ColorId.FolderExpanded.Value());
+                using var node  = TreeNode($"{collection.AnonymizedName} (Change Counter {collection.ChangeCounter})");
+                if (!node)
+                    continue;
+
+                color.Pop();
+                foreach (var (mod, paths, manips) in collection._cache!.ModData.Data.OrderBy(t => t.Item1.Name))
+                {
+                    using var id    = mod is TemporaryMod t ? PushId(t.Priority) : PushId(((Mod)mod).ModPath.Name);
+                    using var node2 = TreeNode(mod.Name.Text);
+                    if (!node2)
+                        continue;
+
+                    foreach (var path in paths)
+
+                        TreeNode(path.ToString(), ImGuiTreeNodeFlags.Bullet | ImGuiTreeNodeFlags.Leaf).Dispose();
+
+                    foreach (var manip in manips)
+                        TreeNode(manip.ToString(), ImGuiTreeNodeFlags.Bullet | ImGuiTreeNodeFlags.Leaf).Dispose();
+                }
+            }
+            else
+            {
+                using var color = PushColor(ImGuiCol.Text, ColorId.UndefinedMod.Value());
+                TreeNode($"{collection.AnonymizedName} (Change Counter {collection.ChangeCounter})",
+                    ImGuiTreeNodeFlags.Bullet | ImGuiTreeNodeFlags.Leaf).Dispose();
+            }
+        }
     }
 
     /// <summary> Draw general information about mod and collection state. </summary>
@@ -168,17 +225,6 @@ public class DebugTab : Window, ITab
             }
         }
 
-        using (var tree = TreeNode($"Collections ({_collectionManager.Caches.Count}/{_collectionManager.Storage.Count - 1})###Collections"))
-        {
-            if (tree)
-            {
-                using var table = Table("##DebugCollectionsTable", 2, ImGuiTableFlags.SizingFixedFit);
-                if (table)
-                    foreach (var collection in _collectionManager.Storage)
-                        PrintValue(collection.Name, collection.HasCache.ToString());
-            }
-        }
-
         var issues = _modManager.WithIndex().Count(p => p.Index != p.Value.Index);
         using (var tree = TreeNode($"Mods ({issues} Issues)###Mods"))
         {
@@ -209,10 +255,10 @@ public class DebugTab : Window, ITab
                 if (table)
                 {
                     var importing = _modImporter.IsImporting(out var importer);
-                    PrintValue("Is Importing",   importing.ToString());
-                    PrintValue("Importer State", (importer?.State ?? ImporterState.None).ToString());
+                    PrintValue("Is Importing",            importing.ToString());
+                    PrintValue("Importer State",          (importer?.State ?? ImporterState.None).ToString());
                     PrintValue("Import Window Was Drawn", _importPopup.WasDrawn.ToString());
-                    PrintValue("Import Popup Was Drawn", _importPopup.PopupWasDrawn.ToString());
+                    PrintValue("Import Popup Was Drawn",  _importPopup.PopupWasDrawn.ToString());
                     ImGui.TableNextColumn();
                     ImGui.TextUnformatted("Import Batches");
                     ImGui.TableNextColumn();
@@ -232,6 +278,42 @@ public class DebugTab : Window, ITab
                         ImGui.TextUnformatted(mod.Name);
                     }
                 }
+            }
+        }
+
+        using (var tree = TreeNode("Framework"))
+        {
+            if (tree)
+            {
+                using var table = Table("##DebugFramework", 2, ImGuiTableFlags.SizingFixedFit);
+                if (table)
+                {
+                    foreach (var important in _framework.Important)
+                        PrintValue(important, "Immediate");
+
+                    foreach (var (onTick, idx) in _framework.OnTick.WithIndex())
+                        PrintValue(onTick, $"{idx + 1} Tick(s) From Now");
+
+                    foreach (var (time, name) in _framework.Delayed)
+                    {
+                        var span = time - DateTime.UtcNow;
+                        PrintValue(name, $"After {span.Minutes:D2}:{span.Seconds:D2}.{span.Milliseconds / 10:D2} (+ Ticks)");
+                    }
+                }
+            }
+        }
+
+        using (var tree = TreeNode($"Texture Manager {_textureManager.Tasks.Count}###Texture Manager"))
+        {
+            if (tree)
+            {
+                using var table = Table("##Tasks", 2, ImGuiTableFlags.RowBg);
+                if (table)
+                    foreach (var task in _textureManager.Tasks)
+                    {
+                        ImGuiUtil.DrawTableColumn(task.Key.ToString()!);
+                        ImGuiUtil.DrawTableColumn(task.Value.Item1.Status.ToString());
+                    }
             }
         }
     }
@@ -259,7 +341,7 @@ public class DebugTab : Window, ITab
         if (!ImGui.CollapsingHeader("Actors"))
             return;
 
-        using var table = Table("##actors", 4, ImGuiTableFlags.RowBg | ImGuiTableFlags.SizingFixedFit,
+        using var table = Table("##actors", 5, ImGuiTableFlags.RowBg | ImGuiTableFlags.SizingFixedFit,
             -Vector2.UnitX);
         if (!table)
             return;
@@ -270,6 +352,7 @@ public class DebugTab : Window, ITab
                 return;
 
             ImGuiUtil.DrawTableColumn(name);
+            ImGuiUtil.DrawTableColumn(string.Empty);
             ImGuiUtil.DrawTableColumn(string.Empty);
             ImGuiUtil.DrawTableColumn(_actorService.AwaitedService.ToString(id));
             ImGuiUtil.DrawTableColumn(string.Empty);
@@ -284,6 +367,9 @@ public class DebugTab : Window, ITab
         {
             ImGuiUtil.DrawTableColumn($"{((GameObject*)obj.Address)->ObjectIndex}");
             ImGuiUtil.DrawTableColumn($"0x{obj.Address:X}");
+            ImGuiUtil.DrawTableColumn(obj.Address == nint.Zero
+                ? string.Empty
+                : $"0x{(nint)((Character*)obj.Address)->GameObject.GetDrawObject():X}");
             var identifier = _actorService.AwaitedService.FromObject(obj, false, true, false);
             ImGuiUtil.DrawTableColumn(_actorService.AwaitedService.ToString(identifier));
             var id = obj.ObjectKind == ObjectKind.BattleNpc ? $"{identifier.DataId} | {obj.DataId}" : identifier.DataId.ToString();
@@ -445,10 +531,10 @@ public class DebugTab : Window, ITab
                     if (table)
                         for (var i = 0; i < 8; ++i)
                         {
-                            var c = agent->Character(i);
+                            ref var c = ref agent->Data->CharacterArraySpan[i];
                             ImGuiUtil.DrawTableColumn($"Character {i}");
-                            var name = c->Name1.ToString();
-                            ImGuiUtil.DrawTableColumn(name.Length == 0 ? "NULL" : $"{name} ({c->WorldId})");
+                            var name = c.Name1.ToString();
+                            ImGuiUtil.DrawTableColumn(name.Length == 0 ? "NULL" : $"{name} ({c.WorldId})");
                         }
                 }
                 else
@@ -459,9 +545,50 @@ public class DebugTab : Window, ITab
         }
     }
 
+    private void DrawData()
+    {
+        if (!ImGui.CollapsingHeader("Game Data"))
+            return;
+
+        DrawEmotes();
+        DrawStainTemplates();
+    }
+
+    private string _emoteSearchFile = string.Empty;
+    private string _emoteSearchName = string.Empty;
+
+    private void DrawEmotes()
+    {
+        using var mainTree = TreeNode("Emotes");
+        if (!mainTree)
+            return;
+
+        ImGui.InputText("File Name",  ref _emoteSearchFile, 256);
+        ImGui.InputText("Emote Name", ref _emoteSearchName, 256);
+        using var table = Table("##table", 2, ImGuiTableFlags.RowBg | ImGuiTableFlags.ScrollY | ImGuiTableFlags.SizingFixedFit,
+            new Vector2(-1, 12 * ImGui.GetTextLineHeightWithSpacing()));
+        if (!table)
+            return;
+
+        var skips = ImGuiClip.GetNecessarySkips(ImGui.GetTextLineHeightWithSpacing());
+        var dummy = ImGuiClip.FilteredClippedDraw(_identifier.AwaitedService.Emotes, skips,
+            p => p.Key.Contains(_emoteSearchFile, StringComparison.OrdinalIgnoreCase)
+             && (_emoteSearchName.Length == 0
+                 || p.Value.Any(s => s.Name.ToDalamudString().TextValue.Contains(_emoteSearchName, StringComparison.OrdinalIgnoreCase))),
+            p =>
+            {
+                ImGui.TableNextColumn();
+                ImGui.TextUnformatted(p.Key);
+                ImGui.TableNextColumn();
+                ImGui.TextUnformatted(string.Join(", ", p.Value.Select(v => v.Name.ToDalamudString().TextValue)));
+            });
+        ImGuiClip.DrawEndDummy(dummy, ImGui.GetTextLineHeightWithSpacing());
+    }
+
     private void DrawStainTemplates()
     {
-        if (!ImGui.CollapsingHeader("Staining Templates"))
+        using var mainTree = TreeNode("Staining Templates");
+        if (!mainTree)
             return;
 
         foreach (var (key, data) in _stains.StmFile.Entries)
@@ -503,45 +630,73 @@ public class DebugTab : Window, ITab
         if (!ImGui.CollapsingHeader("Character Utility"))
             return;
 
-        using var table = Table("##CharacterUtility", 6, ImGuiTableFlags.RowBg | ImGuiTableFlags.SizingFixedFit,
+        var enableSkinFixer = _skinFixer.Enabled;
+        if (ImGui.Checkbox("Enable Skin Fixer", ref enableSkinFixer))
+            _skinFixer.Enabled = enableSkinFixer;
+
+        if (enableSkinFixer)
+        {
+            ImGui.SameLine();
+            ImGui.Dummy(ImGuiHelpers.ScaledVector2(20, 0));
+            ImGui.SameLine();
+            ImGui.TextUnformatted($"\u0394 Slow-Path Calls: {_skinFixer.GetAndResetSlowPathCallDelta()}");
+            ImGui.SameLine();
+            ImGui.Dummy(ImGuiHelpers.ScaledVector2(20, 0));
+            ImGui.SameLine();
+            ImGui.TextUnformatted($"Materials with Modded skin.shpk: {_skinFixer.ModdedSkinShpkCount}");
+        }
+
+        using var table = Table("##CharacterUtility", 7, ImGuiTableFlags.RowBg | ImGuiTableFlags.SizingFixedFit,
             -Vector2.UnitX);
         if (!table)
             return;
 
-        for (var i = 0; i < CharacterUtility.RelevantIndices.Length; ++i)
+        for (var idx = 0; idx < CharacterUtility.ReverseIndices.Length; ++idx)
         {
-            var idx      = CharacterUtility.RelevantIndices[i];
-            var intern   = new CharacterUtility.InternalIndex(i);
+            var intern   = CharacterUtility.ReverseIndices[idx];
             var resource = _characterUtility.Address->Resource(idx);
+            ImGui.TableNextColumn();
+            ImGui.TextUnformatted($"[{idx}]");
             ImGui.TableNextColumn();
             ImGui.TextUnformatted($"0x{(ulong)resource:X}");
             ImGui.TableNextColumn();
-            UiHelpers.Text(resource);
-            ImGui.TableNextColumn();
-            ImGui.Selectable($"0x{resource->GetData().Data:X}");
-            if (ImGui.IsItemClicked())
+            if (resource == null)
             {
-                var (data, length) = resource->GetData();
-                if (data != nint.Zero && length > 0)
-                    ImGui.SetClipboardText(string.Join("\n",
-                        new ReadOnlySpan<byte>((byte*)data, length).ToArray().Select(b => b.ToString("X2"))));
+                ImGui.TableNextRow();
+                continue;
             }
 
-            ImGuiUtil.HoverTooltip("Click to copy bytes to clipboard.");
-
+            UiHelpers.Text(resource);
             ImGui.TableNextColumn();
-            ImGui.TextUnformatted($"{resource->GetData().Length}");
-            ImGui.TableNextColumn();
-            ImGui.Selectable($"0x{_characterUtility.DefaultResource(intern).Address:X}");
-            if (ImGui.IsItemClicked())
-                ImGui.SetClipboardText(string.Join("\n",
-                    new ReadOnlySpan<byte>((byte*)_characterUtility.DefaultResource(intern).Address,
-                        _characterUtility.DefaultResource(intern).Size).ToArray().Select(b => b.ToString("X2"))));
+            var data   = (nint)ResourceHandle.GetData(resource);
+            var length = ResourceHandle.GetLength(resource);
+            if (ImGui.Selectable($"0x{data:X}"))
+                if (data != nint.Zero && length > 0)
+                    ImGui.SetClipboardText(string.Join("\n",
+                        new ReadOnlySpan<byte>((byte*)data, (int)length).ToArray().Select(b => b.ToString("X2"))));
 
             ImGuiUtil.HoverTooltip("Click to copy bytes to clipboard.");
+            ImGui.TableNextColumn();
+            ImGui.TextUnformatted(length.ToString());
 
             ImGui.TableNextColumn();
-            ImGui.TextUnformatted($"{_characterUtility.DefaultResource(intern).Size}");
+            if (intern.Value != -1)
+            {
+                ImGui.Selectable($"0x{_characterUtility.DefaultResource(intern).Address:X}");
+                if (ImGui.IsItemClicked())
+                    ImGui.SetClipboardText(string.Join("\n",
+                        new ReadOnlySpan<byte>((byte*)_characterUtility.DefaultResource(intern).Address,
+                            _characterUtility.DefaultResource(intern).Size).ToArray().Select(b => b.ToString("X2"))));
+
+                ImGuiUtil.HoverTooltip("Click to copy bytes to clipboard.");
+
+                ImGui.TableNextColumn();
+                ImGui.TextUnformatted($"{_characterUtility.DefaultResource(intern).Size}");
+            }
+            else
+            {
+                ImGui.TableNextColumn();
+            }
         }
     }
 
@@ -565,7 +720,8 @@ public class DebugTab : Window, ITab
     /// <summary> Draw information about the resident resource files. </summary>
     private unsafe void DrawDebugResidentResources()
     {
-        if (!ImGui.CollapsingHeader("Resident Resources"))
+        using var tree = TreeNode("Resident Resources");
+        if (!tree)
             return;
 
         if (_residentResources.Address == null || _residentResources.Address->NumResources == 0)
@@ -586,6 +742,20 @@ public class DebugTab : Window, ITab
         }
     }
 
+    private static void DrawCopyableAddress(string label, nint address)
+    {
+        using (var _ = PushFont(UiBuilder.MonoFont))
+        {
+            if (ImGui.Selectable($"0x{address:X16}    {label}"))
+                ImGui.SetClipboardText($"{address:X16}");
+        }
+
+        ImGuiUtil.HoverTooltip("Click to copy address to clipboard.");
+    }
+
+    private static unsafe void DrawCopyableAddress(string label, void* address)
+        => DrawCopyableAddress(label, (nint)address);
+
     /// <summary> Draw information about the models, materials and resources currently loaded by the local player. </summary>
     private unsafe void DrawPlayerModelInfo()
     {
@@ -594,9 +764,13 @@ public class DebugTab : Window, ITab
         if (!ImGui.CollapsingHeader($"Player Model Info: {name}##Draw") || player == null)
             return;
 
+        DrawCopyableAddress("PlayerCharacter", player.Address);
+
         var model = (CharacterBase*)((Character*)player.Address)->GameObject.GetDrawObject();
         if (model == null)
             return;
+
+        DrawCopyableAddress("CharacterBase", model);
 
         using (var t1 = Table("##table", 2, ImGuiTableFlags.SizingFixedFit))
         {
@@ -638,7 +812,7 @@ public class DebugTab : Window, ITab
             if (imc != null)
                 UiHelpers.Text(imc);
 
-            var mdl = (RenderModel*)model->ModelArray[i];
+            var mdl = (RenderModel*)model->Models[i];
             ImGui.TableNextColumn();
             ImGui.TextUnformatted(mdl == null ? "NULL" : $"0x{(ulong)mdl:X}");
             if (mdl == null || mdl->ResourceHandle == null || mdl->ResourceHandle->Category != ResourceCategory.Chara)
@@ -649,6 +823,20 @@ public class DebugTab : Window, ITab
                 UiHelpers.Text(mdl->ResourceHandle);
             }
         }
+    }
+
+    /// <summary> Draw information about some game global variables. </summary>
+    private unsafe void DrawGlobalVariableInfo()
+    {
+        var header = ImGui.CollapsingHeader("Global Variables");
+        ImGuiUtil.HoverTooltip("Draw information about global variables. Can provide useful starting points for a memory viewer.");
+        if (!header)
+            return;
+
+        DrawCopyableAddress("CharacterUtility",        _characterUtility.Address);
+        DrawCopyableAddress("ResidentResourceManager", _residentResources.Address);
+        DrawCopyableAddress("Device",                  Device.Instance());
+        DrawDebugResidentResources();
     }
 
     /// <summary> Draw resources with unusual reference count. </summary>

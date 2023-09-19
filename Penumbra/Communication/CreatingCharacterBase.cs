@@ -1,5 +1,5 @@
-using System;
-using Penumbra.Util;
+using OtterGui.Classes;
+using Penumbra.Api;
 
 namespace Penumbra.Communication;
 
@@ -16,7 +16,7 @@ public sealed class CreatingCharacterBase : EventWrapper<Action<nint, string, ni
 {
     public enum Priority
     {
-        /// <seealso cref="Api.PenumbraApi.CreatingCharacterBase"/>
+        /// <seealso cref="PenumbraApi.CreatingCharacterBase"/>
         Api = 0,
     }
 

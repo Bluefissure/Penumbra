@@ -1,7 +1,6 @@
 using Penumbra.Mods;
-using System.Collections.Generic;
-using System.Linq;
 using Penumbra.Mods.Manager;
+using Penumbra.Mods.Subclasses;
 using Penumbra.Services;
 using Penumbra.Util;
 

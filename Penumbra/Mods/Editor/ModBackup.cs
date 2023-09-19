@@ -1,28 +1,26 @@
-using System;
-using System.Collections.Generic;
-using System.IO;
 using System.IO.Compression;
-using System.Threading.Tasks;
+using OtterGui.Tasks;
 using Penumbra.Mods.Manager;
 
-namespace Penumbra.Mods;
+namespace Penumbra.Mods.Editor;
 
 /// <summary> Utility to create and apply a zipped backup of a mod. </summary>
 public class ModBackup
 {
     /// <summary> Set when reading Config and migrating from v4 to v5. </summary>
     public static bool MigrateModBackups = false;
+
     public static bool CreatingBackup { get; private set; }
 
-    private readonly Mod           _mod;
-    public readonly  string        Name;
-    public readonly  bool          Exists;
+    private readonly Mod    _mod;
+    public readonly  string Name;
+    public readonly  bool   Exists;
 
     public ModBackup(ModExportManager modExportManager, Mod mod)
     {
-        _mod           = mod;
-        Name           = Path.Combine(modExportManager.ExportDirectory.FullName, _mod.ModPath.Name) + ".pmp";
-        Exists         = File.Exists(Name);
+        _mod   = mod;
+        Name   = Path.Combine(modExportManager.ExportDirectory.FullName, _mod.ModPath.Name) + ".pmp";
+        Exists = File.Exists(Name);
     }
 
     /// <summary> Migrate file extensions. </summary>
@@ -80,7 +78,7 @@ public class ModBackup
             return;
 
         CreatingBackup = true;
-        await Task.Run(Create);
+        await AsyncTask.Run(Create);
         CreatingBackup = false;
     }
 

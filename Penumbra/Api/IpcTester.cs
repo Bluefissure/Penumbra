@@ -4,11 +4,7 @@ using ImGuiNET;
 using OtterGui;
 using OtterGui.Raii;
 using Penumbra.Mods;
-using System;
-using System.Collections.Generic;
 using System.Globalization;
-using System.Linq;
-using System.Numerics;
 using Dalamud.Utility;
 using Penumbra.Api.Enums;
 using Penumbra.Api.Helpers;
@@ -19,7 +15,9 @@ using Penumbra.Mods.Manager;
 using Penumbra.Services;
 using Penumbra.UI;
 using Penumbra.Collections.Manager;
-using Penumbra.Util;
+using Dalamud.Plugin.Services;
+using Penumbra.GameData.Enums;
+using System.Diagnostics;
 
 namespace Penumbra.Api;
 
@@ -38,7 +36,9 @@ public class IpcTester : IDisposable
     private readonly Meta             _meta;
     private readonly Mods             _mods;
     private readonly ModSettings      _modSettings;
+    private readonly Editing          _editing;
     private readonly Temporary        _temporary;
+    private readonly ResourceTree     _resourceTree;
 
     public IpcTester(Configuration config, DalamudServices dalamud, PenumbraIpcProviders ipcProviders, ModManager modManager,
         CollectionManager collections, TempModManager tempMods, TempCollectionManager tempCollections, SaveService saveService)
@@ -54,7 +54,9 @@ public class IpcTester : IDisposable
         _meta             = new Meta(dalamud.PluginInterface);
         _mods             = new Mods(dalamud.PluginInterface);
         _modSettings      = new ModSettings(dalamud.PluginInterface);
+        _editing          = new Editing(dalamud.PluginInterface);
         _temporary        = new Temporary(dalamud.PluginInterface, modManager, collections, tempMods, tempCollections, saveService, config);
+        _resourceTree     = new ResourceTree(dalamud.PluginInterface, dalamud.Objects);
         UnsubscribeEvents();
     }
 
@@ -74,9 +76,11 @@ public class IpcTester : IDisposable
             _meta.Draw();
             _mods.Draw();
             _modSettings.Draw();
+            _editing.Draw();
             _temporary.Draw();
             _temporary.DrawCollections();
             _temporary.DrawMods();
+            _resourceTree.Draw();
         }
         catch (Exception e)
         {
@@ -404,7 +408,7 @@ public class IpcTester : IDisposable
         public Redrawing(DalamudServices dalamud)
         {
             _dalamud = dalamud;
-            Redrawn = Ipc.GameObjectRedrawn.Subscriber(_dalamud.PluginInterface, SetLastRedrawn);
+            Redrawn  = Ipc.GameObjectRedrawn.Subscriber(_dalamud.PluginInterface, SetLastRedrawn);
         }
 
         public void Draw()
@@ -1149,6 +1153,72 @@ public class IpcTester : IDisposable
         }
     }
 
+    private class Editing
+    {
+        private readonly DalamudPluginInterface _pi;
+
+        private string _inputPath   = string.Empty;
+        private string _inputPath2  = string.Empty;
+        private string _outputPath  = string.Empty;
+        private string _outputPath2 = string.Empty;
+
+        private TextureType _typeSelector;
+        private bool        _mipMaps = true;
+
+        private Task? _task1;
+        private Task? _task2;
+
+        public Editing(DalamudPluginInterface pi)
+            => _pi = pi;
+
+        public void Draw()
+        {
+            using var _ = ImRaii.TreeNode("Editing");
+            if (!_)
+                return;
+
+            ImGui.InputTextWithHint("##inputPath",   "Input Texture Path...",    ref _inputPath,   256);
+            ImGui.InputTextWithHint("##outputPath",  "Output Texture Path...",   ref _outputPath,  256);
+            ImGui.InputTextWithHint("##inputPath2",  "Input Texture Path 2...",  ref _inputPath2,  256);
+            ImGui.InputTextWithHint("##outputPath2", "Output Texture Path 2...", ref _outputPath2, 256);
+            TypeCombo();
+            ImGui.Checkbox("Add MipMaps", ref _mipMaps);
+
+            using var table = ImRaii.Table("...", 3, ImGuiTableFlags.SizingFixedFit);
+            if (!table)
+                return;
+
+            DrawIntro(Ipc.ConvertTextureFile.Label, "Convert Texture 1");
+            if (ImGuiUtil.DrawDisabledButton("Save 1", Vector2.Zero, string.Empty, _task1 is { IsCompleted: false }))
+                _task1 = Ipc.ConvertTextureFile.Subscriber(_pi).Invoke(_inputPath, _outputPath, _typeSelector, _mipMaps);
+            ImGui.SameLine();
+            ImGui.TextUnformatted(_task1 == null ? "Not Initiated" : _task1.Status.ToString());
+            if (ImGui.IsItemHovered() && _task1?.Status == TaskStatus.Faulted)
+                ImGui.SetTooltip(_task1.Exception?.ToString());
+
+            DrawIntro(Ipc.ConvertTextureFile.Label, "Convert Texture 2");
+            if (ImGuiUtil.DrawDisabledButton("Save 2", Vector2.Zero, string.Empty, _task2 is { IsCompleted: false }))
+                _task2 = Ipc.ConvertTextureFile.Subscriber(_pi).Invoke(_inputPath2, _outputPath2, _typeSelector, _mipMaps);
+            ImGui.SameLine();
+            ImGui.TextUnformatted(_task2 == null ? "Not Initiated" : _task2.Status.ToString());
+            if (ImGui.IsItemHovered() && _task2?.Status == TaskStatus.Faulted)
+                ImGui.SetTooltip(_task2.Exception?.ToString());
+        }
+
+        private void TypeCombo()
+        {
+            using var combo = ImRaii.Combo("Convert To", _typeSelector.ToString());
+            if (!combo)
+                return;
+
+            foreach (var value in Enum.GetValues<TextureType>())
+            {
+                if (ImGui.Selectable(value.ToString(), _typeSelector == value))
+                    _typeSelector = value;
+            }
+        }
+    }
+
     private class Temporary
     {
         private readonly DalamudPluginInterface _pi;
@@ -1331,6 +1401,242 @@ public class IpcTester : IDisposable
                 foreach (var (collection, list) in _tempMods.Mods)
                     PrintList(collection.Name, list);
             }
+        }
+    }
+
+    private class ResourceTree
+    {
+        private readonly DalamudPluginInterface _pi;
+        private readonly IObjectTable           _objects;
+        private readonly Stopwatch              _stopwatch = new();
+
+        private string       _gameObjectIndices = "0";
+        private ResourceType _type              = ResourceType.Mtrl;
+        private bool         _withUIData        = false;
+
+        private (string, IReadOnlyDictionary<string, string[]>?)[]?                        _lastGameObjectResourcePaths;
+        private (string, IReadOnlyDictionary<string, string[]>?)[]?                        _lastPlayerResourcePaths;
+        private (string, IReadOnlyDictionary<nint, (string, string, ChangedItemIcon)>?)[]? _lastGameObjectResourcesOfType;
+        private (string, IReadOnlyDictionary<nint, (string, string, ChangedItemIcon)>?)[]? _lastPlayerResourcesOfType;
+        private TimeSpan                                                                   _lastCallDuration;
+
+        public ResourceTree(DalamudPluginInterface pi, IObjectTable objects)
+        {
+            _pi      = pi;
+            _objects = objects;
+        }
+
+        public void Draw()
+        {
+            using var _ = ImRaii.TreeNode("Resource Tree");
+            if (!_)
+                return;
+
+            ImGui.InputText("GameObject indices", ref _gameObjectIndices, 511);
+            ImGuiUtil.GenericEnumCombo("Resource type", ImGui.CalcItemWidth(), _type, out _type, Enum.GetValues<ResourceType>());
+            ImGui.Checkbox("Also get names and icons", ref _withUIData);
+
+            using var table = ImRaii.Table(string.Empty, 3, ImGuiTableFlags.SizingFixedFit);
+            if (!table)
+                return;
+
+            DrawIntro(Ipc.GetGameObjectResourcePaths.Label, "Get GameObject resource paths");
+            if (ImGui.Button("Get##GameObjectResourcePaths"))
+            {
+                var gameObjects   = GetSelectedGameObjects();
+                var subscriber    = Ipc.GetGameObjectResourcePaths.Subscriber(_pi);
+                _stopwatch.Restart();
+                var resourcePaths = subscriber.Invoke(gameObjects);
+
+                _lastCallDuration            = _stopwatch.Elapsed;
+                _lastGameObjectResourcePaths = gameObjects
+                    .Select(GameObjectToString)
+                    .Zip(resourcePaths)
+                    .ToArray();
+
+                ImGui.OpenPopup(nameof(Ipc.GetGameObjectResourcePaths));
+            }
+
+            DrawIntro(Ipc.GetPlayerResourcePaths.Label, "Get local player resource paths");
+            if (ImGui.Button("Get##PlayerResourcePaths"))
+            {
+                var subscriber    = Ipc.GetPlayerResourcePaths.Subscriber(_pi);
+                _stopwatch.Restart();
+                var resourcePaths = subscriber.Invoke();
+
+                _lastCallDuration        = _stopwatch.Elapsed;
+                _lastPlayerResourcePaths = resourcePaths
+                    .Select(pair => (GameObjectToString(pair.Key), (IReadOnlyDictionary<string, string[]>?)pair.Value))
+                    .ToArray();
+
+                ImGui.OpenPopup(nameof(Ipc.GetPlayerResourcePaths));
+            }
+
+            DrawIntro(Ipc.GetGameObjectResourcesOfType.Label, "Get GameObject resources of type");
+            if (ImGui.Button("Get##GameObjectResourcesOfType"))
+            {
+                var gameObjects     = GetSelectedGameObjects();
+                var subscriber      = Ipc.GetGameObjectResourcesOfType.Subscriber(_pi);
+                _stopwatch.Restart();
+                var resourcesOfType = subscriber.Invoke(_type, _withUIData, gameObjects);
+
+                _lastCallDuration              = _stopwatch.Elapsed;
+                _lastGameObjectResourcesOfType = gameObjects
+                    .Select(GameObjectToString)
+                    .Zip(resourcesOfType)
+                    .ToArray();
+
+                ImGui.OpenPopup(nameof(Ipc.GetGameObjectResourcesOfType));
+            }
+
+            DrawIntro(Ipc.GetPlayerResourcesOfType.Label, "Get local player resources of type");
+            if (ImGui.Button("Get##PlayerResourcesOfType"))
+            {
+                var subscriber      = Ipc.GetPlayerResourcesOfType.Subscriber(_pi);
+                _stopwatch.Restart();
+                var resourcesOfType = subscriber.Invoke(_type, _withUIData);
+
+                _lastCallDuration          = _stopwatch.Elapsed;
+                _lastPlayerResourcesOfType = resourcesOfType
+                    .Select(pair => (GameObjectToString(pair.Key), (IReadOnlyDictionary<nint, (string, string, ChangedItemIcon)>?)pair.Value))
+                    .ToArray();
+
+                ImGui.OpenPopup(nameof(Ipc.GetPlayerResourcesOfType));
+            }
+
+            DrawPopup(nameof(Ipc.GetGameObjectResourcePaths), ref _lastGameObjectResourcePaths, DrawResourcePaths, _lastCallDuration);
+            DrawPopup(nameof(Ipc.GetPlayerResourcePaths), ref _lastPlayerResourcePaths, DrawResourcePaths, _lastCallDuration);
+
+            DrawPopup(nameof(Ipc.GetGameObjectResourcesOfType), ref _lastGameObjectResourcesOfType, DrawResourcesOfType, _lastCallDuration);
+            DrawPopup(nameof(Ipc.GetPlayerResourcesOfType), ref _lastPlayerResourcesOfType, DrawResourcesOfType, _lastCallDuration);
+        }
+
+        private static void DrawPopup<T>(string popupId, ref T? result, Action<T> drawResult, TimeSpan duration) where T : class
+        {
+            ImGui.SetNextWindowSize(ImGuiHelpers.ScaledVector2(1000, 500));
+            using var popup = ImRaii.Popup(popupId);
+            if (!popup)
+            {
+                result = null;
+                return;
+            }
+
+            if (result == null)
+            {
+                ImGui.CloseCurrentPopup();
+                return;
+            }
+
+            drawResult(result);
+
+            ImGui.TextUnformatted($"Invoked in {duration.TotalMilliseconds} ms");
+
+            if (ImGui.Button("Close", -Vector2.UnitX) || !ImGui.IsWindowFocused())
+            {
+                result = null;
+                ImGui.CloseCurrentPopup();
+            }
+        }
+
+        private static void DrawWithHeaders<T>((string, T?)[] result, Action<T> drawItem) where T : class
+        {
+            var firstSeen = new Dictionary<T, string>();
+            foreach (var (label, item) in result)
+            {
+                if (item == null)
+                {
+                    ImRaii.TreeNode($"{label}: null", ImGuiTreeNodeFlags.Leaf).Dispose();
+                    continue;
+                }
+
+                if (firstSeen.TryGetValue(item, out var firstLabel))
+                {
+                    ImRaii.TreeNode($"{label}: same as {firstLabel}", ImGuiTreeNodeFlags.Leaf).Dispose();
+                    continue;
+                }
+
+                firstSeen.Add(item, label);
+
+                using var header = ImRaii.TreeNode(label);
+                if (!header)
+                    continue;
+
+                drawItem(item);
+            }
+        }
+
+        private static void DrawResourcePaths((string, IReadOnlyDictionary<string, string[]>?)[] result)
+        {
+            DrawWithHeaders(result, paths =>
+            {
+                using var table = ImRaii.Table(string.Empty, 2, ImGuiTableFlags.SizingFixedFit);
+                if (!table)
+                    return;
+
+                ImGui.TableSetupColumn("Actual Path", ImGuiTableColumnFlags.WidthStretch, 0.6f);
+                ImGui.TableSetupColumn("Game Paths", ImGuiTableColumnFlags.WidthStretch, 0.4f);
+                ImGui.TableHeadersRow();
+
+                foreach (var (actualPath, gamePaths) in paths)
+                {
+                    ImGui.TableNextColumn();
+                    ImGui.TextUnformatted(actualPath);
+                    ImGui.TableNextColumn();
+                    foreach (var gamePath in gamePaths)
+                        ImGui.TextUnformatted(gamePath);
+                }
+            });
+        }
+
+        private void DrawResourcesOfType((string, IReadOnlyDictionary<nint, (string, string, ChangedItemIcon)>?)[] result)
+        {
+            DrawWithHeaders(result, resources =>
+            {
+                using var table = ImRaii.Table(string.Empty, _withUIData ? 3 : 2, ImGuiTableFlags.SizingFixedFit);
+                if (!table)
+                    return;
+
+                ImGui.TableSetupColumn("Resource Handle", ImGuiTableColumnFlags.WidthStretch, 0.15f);
+                ImGui.TableSetupColumn("Actual Path", ImGuiTableColumnFlags.WidthStretch, _withUIData ? 0.55f : 0.85f);
+                if (_withUIData)
+                    ImGui.TableSetupColumn("Icon & Name", ImGuiTableColumnFlags.WidthStretch, 0.3f);
+                ImGui.TableHeadersRow();
+
+                foreach (var (resourceHandle, (actualPath, name, icon)) in resources)
+                {
+                    ImGui.TableNextColumn();
+                    TextUnformattedMono($"0x{resourceHandle:X}");
+                    ImGui.TableNextColumn();
+                    ImGui.TextUnformatted(actualPath);
+                    if (_withUIData)
+                    {
+                        ImGui.TableNextColumn();
+                        TextUnformattedMono(icon.ToString());
+                        ImGui.SameLine();
+                        ImGui.TextUnformatted(name);
+                    }
+                }
+            });
+        }
+
+        private static void TextUnformattedMono(string text)
+        {
+            using var _ = ImRaii.PushFont(UiBuilder.MonoFont);
+            ImGui.TextUnformatted(text);
+        }
+
+        private ushort[] GetSelectedGameObjects()
+            => _gameObjectIndices.Split(',')
+                    .SelectWhere(index => (ushort.TryParse(index.Trim(), out var i), i))
+                    .ToArray();
+
+        private unsafe string GameObjectToString(ushort gameObjectIndex)
+        {
+            var gameObject = _objects[gameObjectIndex];
+
+            return gameObject != null
+                ? $"[{gameObjectIndex}] {gameObject.Name} ({gameObject.ObjectKind})"
+                : $"[{gameObjectIndex}] null";
         }
     }
 }

@@ -1,11 +1,10 @@
-using System;
 using OtterGui.Classes;
 using Penumbra.Collections;
-using Penumbra.GameData.Enums;
+using Penumbra.Enums;
 using Penumbra.Interop.Structs;
 using Penumbra.String;
 
-namespace Penumbra.UI;
+namespace Penumbra.UI.ResourceWatcher;
 
 [Flags]
 public enum RecordType : byte
@@ -31,6 +30,7 @@ internal unsafe struct Record
     public OptionalBool         Synchronously;
     public OptionalBool         ReturnValue;
     public OptionalBool         CustomLoad;
+    public LoadState            LoadState;
 
     public static Record CreateRequest(ByteString path, bool sync)
         => new()
@@ -48,6 +48,7 @@ internal unsafe struct Record
             ReturnValue          = OptionalBool.Null,
             CustomLoad           = OptionalBool.Null,
             AssociatedGameObject = string.Empty,
+            LoadState            = LoadState.None,
         };
 
     public static Record CreateDefaultLoad(ByteString path, ResourceHandle* handle, ModCollection collection, string associatedGameObject)
@@ -68,6 +69,7 @@ internal unsafe struct Record
             ReturnValue          = OptionalBool.Null,
             CustomLoad           = false,
             AssociatedGameObject = associatedGameObject,
+            LoadState            = handle->LoadState,
         };
     }
 
@@ -88,6 +90,7 @@ internal unsafe struct Record
             ReturnValue          = OptionalBool.Null,
             CustomLoad           = true,
             AssociatedGameObject = associatedGameObject,
+            LoadState            = handle->LoadState,
         };
 
     public static Record CreateDestruction(ResourceHandle* handle)
@@ -108,6 +111,7 @@ internal unsafe struct Record
             ReturnValue          = OptionalBool.Null,
             CustomLoad           = OptionalBool.Null,
             AssociatedGameObject = string.Empty,
+            LoadState            = handle->LoadState,
         };
     }
 
@@ -127,5 +131,6 @@ internal unsafe struct Record
             ReturnValue          = ret,
             CustomLoad           = custom,
             AssociatedGameObject = string.Empty,
+            LoadState            = handle->LoadState,
         };
 }

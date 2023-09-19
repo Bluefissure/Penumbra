@@ -1,12 +1,10 @@
-using System;
-using System.IO;
-using System.Numerics;
-using System.Runtime.CompilerServices;
 using Dalamud.Interface;
 using Dalamud.Interface.Components;
 using Dalamud.Utility;
 using ImGuiNET;
 using OtterGui;
+using OtterGui.Compression;
+using OtterGui.Custom;
 using OtterGui.Raii;
 using OtterGui.Widgets;
 using Penumbra.Api;
@@ -25,38 +23,45 @@ public class SettingsTab : ITab
     public ReadOnlySpan<byte> Label
         => "Settings"u8;
 
-    private readonly Configuration           _config;
-    private readonly FontReloader            _fontReloader;
-    private readonly TutorialService         _tutorial;
-    private readonly Penumbra                _penumbra;
-    private readonly FileDialogService       _fileDialog;
-    private readonly ModManager              _modManager;
-    private readonly ModExportManager        _modExportManager;
-    private readonly ModFileSystemSelector   _selector;
-    private readonly CharacterUtility        _characterUtility;
-    private readonly ResidentResourceManager _residentResources;
-    private readonly DalamudServices         _dalamud;
-    private readonly HttpApi                 _httpApi;
+    private readonly Configuration               _config;
+    private readonly FontReloader                _fontReloader;
+    private readonly TutorialService             _tutorial;
+    private readonly Penumbra                    _penumbra;
+    private readonly FileDialogService           _fileDialog;
+    private readonly ModManager                  _modManager;
+    private readonly ModExportManager            _modExportManager;
+    private readonly ModFileSystemSelector       _selector;
+    private readonly CharacterUtility            _characterUtility;
+    private readonly ResidentResourceManager     _residentResources;
+    private readonly DalamudServices             _dalamud;
+    private readonly HttpApi                     _httpApi;
+    private readonly DalamudSubstitutionProvider _dalamudSubstitutionProvider;
+    private readonly FileCompactor               _compactor;
 
     private int _minimumX = int.MaxValue;
     private int _minimumY = int.MaxValue;
 
     public SettingsTab(Configuration config, FontReloader fontReloader, TutorialService tutorial, Penumbra penumbra,
         FileDialogService fileDialog, ModManager modManager, ModFileSystemSelector selector, CharacterUtility characterUtility,
-        ResidentResourceManager residentResources, DalamudServices dalamud, ModExportManager modExportManager, HttpApi httpApi)
+        ResidentResourceManager residentResources, DalamudServices dalamud, ModExportManager modExportManager, HttpApi httpApi,
+        DalamudSubstitutionProvider dalamudSubstitutionProvider, FileCompactor compactor)
     {
-        _config            = config;
-        _fontReloader      = fontReloader;
-        _tutorial          = tutorial;
-        _penumbra          = penumbra;
-        _fileDialog        = fileDialog;
-        _modManager        = modManager;
-        _selector          = selector;
-        _characterUtility  = characterUtility;
-        _residentResources = residentResources;
-        _dalamud           = dalamud;
-        _modExportManager  = modExportManager;
-        _httpApi           = httpApi;
+        _config                      = config;
+        _fontReloader                = fontReloader;
+        _tutorial                    = tutorial;
+        _penumbra                    = penumbra;
+        _fileDialog                  = fileDialog;
+        _modManager                  = modManager;
+        _selector                    = selector;
+        _characterUtility            = characterUtility;
+        _residentResources           = residentResources;
+        _dalamud                     = dalamud;
+        _modExportManager            = modExportManager;
+        _httpApi                     = httpApi;
+        _dalamudSubstitutionProvider = dalamudSubstitutionProvider;
+        _compactor                   = compactor;
+        if (_compactor.CanCompact)
+            _compactor.Enabled = _config.UseFileSystemCompression;
     }
 
     public void DrawHeader()
@@ -371,6 +376,16 @@ public class SettingsTab : ITab
             _config.PrintSuccessfulCommandsToChat, v => _config.PrintSuccessfulCommandsToChat = v);
         Checkbox("Hide Redraw Bar in Mod Panel", "Hides the lower redraw buttons in the mod panel in your Mods tab.",
             _config.HideRedrawBar,               v => _config.HideRedrawBar = v);
+        Checkbox("Hide Changed Item Filters", "Hides the category filter line in the Changed Items tab and the Changed Items mod panel.",
+            _config.HideChangedItemFilters,   v =>
+            {
+                _config.HideChangedItemFilters = v;
+                if (v)
+                    _config.ChangedItemFilter = ChangedItemDrawer.AllFlags;
+            });
+        Checkbox("Hide Priority Numbers in Mod Selector",
+            "Hides the bracketed non-zero priority numbers displayed in the mod selector when there is enough space for them.",
+            _config.HidePrioritiesInSelector, v => _config.HidePrioritiesInSelector = v);
         DrawSingleSelectRadioMax();
         DrawCollapsibleGroupMin();
     }
@@ -378,6 +393,9 @@ public class SettingsTab : ITab
     /// <summary> Draw all settings pertaining to actor identification for collections. </summary>
     private void DrawIdentificationSettings()
     {
+        Checkbox("Use Interface Collection for other Plugin UIs",
+            "Use the collection assigned to your interface for other plugins requesting UI-textures and icons through Dalamud.",
+            _dalamudSubstitutionProvider.Enabled, _dalamudSubstitutionProvider.Set);
         Checkbox($"Use {TutorialService.AssignedCollections} in Character Window",
             "Use the individual collection for your characters name or the Your Character collection in your main character window, if it is set.",
             _config.UseCharacterCollectionInMainWindow, v => _config.UseCharacterCollectionInMainWindow = v);
@@ -644,6 +662,7 @@ public class SettingsTab : ITab
         Checkbox("Auto Deduplicate on Import",
             "Automatically deduplicate mod files on import. This will make mod file sizes smaller, but deletes (binary identical) files.",
             _config.AutoDeduplicateOnImport, v => _config.AutoDeduplicateOnImport = v);
+        DrawCompressionBox();
         Checkbox("Keep Default Metadata Changes on Import",
             "Normally, metadata changes that equal their default values, which are sometimes exported by TexTools, are discarded. "
           + "Toggle this to keep them, for example if an option in a mod is supposed to disable a metadata change from a prior option.",
@@ -654,6 +673,48 @@ public class SettingsTab : ITab
         DrawReloadResourceButton();
         DrawReloadFontsButton();
         ImGui.NewLine();
+    }
+
+    private void DrawCompressionBox()
+    {
+        if (!_compactor.CanCompact)
+            return;
+
+        Checkbox("Use Filesystem Compression",
+            "Use Windows functionality to transparently reduce storage size of mod files on your computer. This might cost performance, but seems to generally be beneficial to performance by shifting more responsibility to the underused CPU and away from the overused hard drives.",
+            _config.UseFileSystemCompression,
+            v =>
+            {
+                _config.UseFileSystemCompression = v;
+                _compactor.Enabled               = v;
+            });
+        ImGui.SameLine();
+        if (ImGuiUtil.DrawDisabledButton("Compress Existing Files", Vector2.Zero,
+                "Try to compress all files in your root directory. This will take a while.",
+                _compactor.MassCompactRunning || !_modManager.Valid))
+            _compactor.StartMassCompact(_modManager.BasePath.EnumerateFiles("*.*", SearchOption.AllDirectories), CompressionAlgorithm.Xpress8K);
+
+        ImGui.SameLine();
+        if (ImGuiUtil.DrawDisabledButton("Decompress Existing Files", Vector2.Zero,
+                "Try to decompress all files in your root directory. This will take a while.",
+                _compactor.MassCompactRunning || !_modManager.Valid))
+            _compactor.StartMassCompact(_modManager.BasePath.EnumerateFiles("*.*", SearchOption.AllDirectories), CompressionAlgorithm.None);
+
+        if (_compactor.MassCompactRunning)
+        {
+            ImGui.ProgressBar((float)_compactor.CurrentIndex / _compactor.TotalFiles,
+                new Vector2(ImGui.GetContentRegionAvail().X - ImGui.GetStyle().ItemSpacing.X - UiHelpers.IconButtonSize.X,
+                    ImGui.GetFrameHeight()),
+                _compactor.CurrentFile?.FullName[(_modManager.BasePath.FullName.Length + 1)..] ?? "Gathering Files...");
+            ImGui.SameLine();
+            if (ImGuiUtil.DrawDisabledButton(FontAwesomeIcon.Ban.ToIconString(), UiHelpers.IconButtonSize, "Cancel the mass action.",
+                    !_compactor.MassCompactRunning, true))
+                _compactor.CancelMassCompact();
+        }
+        else
+        {
+            ImGui.Dummy(UiHelpers.IconButtonSize);
+        }
     }
 
     /// <summary> Draw two integral inputs for minimum dimensions of this window. </summary>
@@ -686,9 +747,9 @@ public class SettingsTab : ITab
                 $"Reset minimum dimensions to ({Configuration.Constants.MinimumSizeX}, {Configuration.Constants.MinimumSizeY}).",
                 x == Configuration.Constants.MinimumSizeX && y == Configuration.Constants.MinimumSizeY))
         {
-            x = Configuration.Constants.MinimumSizeX;
-            y = Configuration.Constants.MinimumSizeY;
-            edited    = true;
+            x      = Configuration.Constants.MinimumSizeX;
+            y      = Configuration.Constants.MinimumSizeY;
+            edited = true;
         }
 
         ImGuiUtil.LabeledHelpMarker("Minimum Window Dimensions",
@@ -790,10 +851,10 @@ public class SettingsTab : ITab
         UiHelpers.DrawSupportButton(_penumbra);
 
         ImGui.SetCursorPos(new Vector2(xPos, 0));
-        UiHelpers.DrawDiscordButton(width);
+        CustomGui.DrawDiscordButton(Penumbra.Chat, width);
 
         ImGui.SetCursorPos(new Vector2(xPos, 2 * ImGui.GetFrameHeightWithSpacing()));
-        UiHelpers.DrawGuideButton(width);
+        CustomGui.DrawGuideButton(Penumbra.Chat, width);
 
         ImGui.SetCursorPos(new Vector2(xPos, 3 * ImGui.GetFrameHeightWithSpacing()));
         if (ImGui.Button("Restart Tutorial", new Vector2(width, 0)))

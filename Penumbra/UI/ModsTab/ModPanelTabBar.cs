@@ -1,5 +1,3 @@
-using System;
-using System.Numerics;
 using Dalamud.Interface;
 using ImGuiNET;
 using OtterGui;
@@ -7,6 +5,7 @@ using OtterGui.Raii;
 using OtterGui.Widgets;
 using Penumbra.Mods;
 using Penumbra.Mods.Manager;
+using Penumbra.Mods.Subclasses;
 using Penumbra.UI.AdvancedWindow;
 
 namespace Penumbra.UI.ModsTab;

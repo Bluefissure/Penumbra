@@ -1,8 +1,3 @@
-using System;
-using System.Collections;
-using System.Collections.Generic;
-using System.Linq;
-using System.Numerics;
 using Dalamud.Interface.Internal.Notifications;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
@@ -10,7 +5,7 @@ using OtterGui;
 using OtterGui.Filesystem;
 using Penumbra.Api.Enums;
 
-namespace Penumbra.Mods;
+namespace Penumbra.Mods.Subclasses;
 
 /// <summary> Groups that allow all available options to be selected at once. </summary>
 public sealed class MultiModGroup : IModGroup
@@ -59,7 +54,7 @@ public sealed class MultiModGroup : IModGroup
             {
                 if (ret.PrioritizedOptions.Count == IModGroup.MaxMultiOptions)
                 {
-                    Penumbra.ChatService.NotificationMessage(
+                    Penumbra.Chat.NotificationMessage(
                         $"Multi Group {ret.Name} has more than {IModGroup.MaxMultiOptions} options, ignoring excessive options.", "Warning",
                         NotificationType.Warning);
                     break;

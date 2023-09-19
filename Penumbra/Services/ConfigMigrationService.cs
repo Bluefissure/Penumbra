@@ -1,7 +1,3 @@
-using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using OtterGui.Filesystem;
@@ -9,9 +5,10 @@ using Penumbra.Collections;
 using Penumbra.Collections.Manager;
 using Penumbra.Interop.Services;
 using Penumbra.Mods;
+using Penumbra.Mods.Editor;
 using Penumbra.Mods.Manager;
+using Penumbra.Mods.Subclasses;
 using Penumbra.UI.Classes;
-using Penumbra.Util;
 
 namespace Penumbra.Services;
 
@@ -47,6 +44,8 @@ public class ConfigMigrationService
 
         if (save || forceSave)
             config.Save();
+
+        Colors.SetColors(config);
     }
 
     public void Migrate(CharacterUtility utility, Configuration config)
@@ -333,7 +332,8 @@ public class ConfigMigrationService
                 dict = dict.ToDictionary(kvp => kvp.Key, kvp => kvp.Value with { Priority = maxPriority - kvp.Value.Priority });
 
             var emptyStorage = new ModStorage();
-            var collection   = ModCollection.CreateFromData(_saveService, emptyStorage, ModCollection.DefaultCollectionName, 0, 1, dict);
+            var collection = ModCollection.CreateFromData(_saveService, emptyStorage, ModCollection.DefaultCollectionName, 0, 1, dict,
+                Array.Empty<string>());
             _saveService.ImmediateSave(new ModCollectionSave(emptyStorage, collection));
         }
         catch (Exception e)

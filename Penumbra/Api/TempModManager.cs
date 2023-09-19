@@ -1,8 +1,6 @@
-using System;
 using Penumbra.Collections;
 using Penumbra.Meta.Manipulations;
 using Penumbra.Mods;
-using System.Collections.Generic;
 using Penumbra.Services;
 using Penumbra.String.Classes;
 using Penumbra.Collections.Manager;
@@ -27,7 +25,7 @@ public class TempModManager : IDisposable
 
     public TempModManager(CommunicatorService communicator)
     {
-        _communicator                        =  communicator;
+        _communicator = communicator;
         _communicator.CollectionChange.Subscribe(OnCollectionChange, CollectionChange.Priority.TempModManager);
     }
 

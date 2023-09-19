@@ -1,6 +1,5 @@
-using System;
+using OtterGui.Classes;
 using Penumbra.Api.Enums;
-using Penumbra.Util;
 
 namespace Penumbra.Communication;
 
@@ -17,6 +16,9 @@ public sealed class ChangedItemClick : EventWrapper<Action<MouseButton, object?>
     {
         /// <seealso cref="Api.PenumbraApi.ChangedItemClicked"/>
         Default = 0,
+
+        /// <seealso cref="Penumbra.SetupApi"/>
+        Link = 1,
     }
 
     public ChangedItemClick()

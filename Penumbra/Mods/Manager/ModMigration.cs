@@ -1,15 +1,11 @@
-using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
 using System.Text.RegularExpressions;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using OtterGui;
 using Penumbra.Api.Enums;
+using Penumbra.Mods.Subclasses;
 using Penumbra.Services;
 using Penumbra.String.Classes;
-using Penumbra.Util;
 
 namespace Penumbra.Mods.Manager;
 
@@ -22,7 +18,9 @@ public static partial class ModMigration
     private static partial Regex GroupStartRegex();
 
     public static bool Migrate(ModCreator creator, SaveService saveService, Mod mod, JObject json, ref uint fileVersion)
-        => MigrateV0ToV1(creator, saveService, mod, json, ref fileVersion) || MigrateV1ToV2(saveService, mod, ref fileVersion) || MigrateV2ToV3(mod, ref fileVersion);
+        => MigrateV0ToV1(creator, saveService, mod, json, ref fileVersion)
+         || MigrateV1ToV2(saveService, mod, ref fileVersion)
+         || MigrateV2ToV3(mod, ref fileVersion);
 
     private static bool MigrateV2ToV3(Mod _, ref uint fileVersion)
     {
@@ -66,8 +64,8 @@ public static partial class ModMigration
 
         var swaps = json["FileSwaps"]?.ToObject<Dictionary<Utf8GamePath, FullPath>>()
          ?? new Dictionary<Utf8GamePath, FullPath>();
-        var groups = json["Groups"]?.ToObject<Dictionary<string, OptionGroupV0>>() ?? new Dictionary<string, OptionGroupV0>();
-        var priority = 1;
+        var groups        = json["Groups"]?.ToObject<Dictionary<string, OptionGroupV0>>() ?? new Dictionary<string, OptionGroupV0>();
+        var priority      = 1;
         var seenMetaFiles = new HashSet<FullPath>();
         foreach (var group in groups.Values)
             ConvertGroup(creator, mod, group, ref priority, seenMetaFiles);
@@ -131,8 +129,8 @@ public static partial class ModMigration
                 var optionPriority = 0;
                 var newMultiGroup = new MultiModGroup()
                 {
-                    Name = group.GroupName,
-                    Priority = priority++,
+                    Name        = group.GroupName,
+                    Priority    = priority++,
                     Description = string.Empty,
                 };
                 mod.Groups.Add(newMultiGroup);
@@ -149,8 +147,8 @@ public static partial class ModMigration
 
                 var newSingleGroup = new SingleModGroup()
                 {
-                    Name = group.GroupName,
-                    Priority = priority++,
+                    Name        = group.GroupName,
+                    Priority    = priority++,
                     Description = string.Empty,
                 };
                 mod.Groups.Add(newSingleGroup);

@@ -1,7 +1,3 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Numerics;
 using Dalamud.Game.ClientState.Objects;
 using Dalamud.Interface;
 using Dalamud.Interface.Components;
@@ -26,7 +22,7 @@ public sealed class CollectionPanel : IDisposable
     private readonly ActiveCollections      _active;
     private readonly CollectionSelector     _selector;
     private readonly ActorService           _actors;
-    private readonly TargetManager          _targets;
+    private readonly ITargetManager         _targets;
     private readonly IndividualAssignmentUi _individualAssignmentUi;
     private readonly InheritanceUi          _inheritanceUi;
     private readonly ModStorage             _mods;
@@ -40,7 +36,7 @@ public sealed class CollectionPanel : IDisposable
     private int _draggedIndividualAssignment = -1;
 
     public CollectionPanel(DalamudPluginInterface pi, CommunicatorService communicator, CollectionManager manager,
-        CollectionSelector selector, ActorService actors, TargetManager targets, ModStorage mods)
+        CollectionSelector selector, ActorService actors, ITargetManager targets, ModStorage mods)
     {
         _collections            = manager.Storage;
         _active                 = manager.Active;
@@ -237,7 +233,7 @@ public sealed class CollectionPanel : IDisposable
                 _active.SetCollection(null, type, _active.Individuals.GetGroup(identifier));
         }
 
-        foreach (var coll in _collections)
+        foreach (var coll in _collections.OrderBy(c => c.Name))
         {
             if (coll != collection && ImGui.MenuItem($"Use {coll.Name}."))
                 _active.SetCollection(coll, type, _active.Individuals.GetGroup(identifier));

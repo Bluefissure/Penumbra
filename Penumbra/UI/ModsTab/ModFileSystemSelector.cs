@@ -1,9 +1,6 @@
-using System;
-using System.Linq;
-using System.Numerics;
-using System.Runtime.InteropServices;
 using Dalamud.Game.ClientState.Keys;
 using Dalamud.Interface;
+using Dalamud.Interface.DragDrop;
 using Dalamud.Interface.Internal.Notifications;
 using ImGuiNET;
 using OtterGui;
@@ -17,6 +14,7 @@ using Penumbra.Collections.Manager;
 using Penumbra.Communication;
 using Penumbra.Mods;
 using Penumbra.Mods.Manager;
+using Penumbra.Mods.Subclasses;
 using Penumbra.Services;
 using Penumbra.UI.Classes;
 using ChatService = Penumbra.Services.ChatService;
@@ -33,13 +31,14 @@ public sealed class ModFileSystemSelector : FileSystemSelector<Mod, ModFileSyste
     private readonly CollectionManager   _collectionManager;
     private readonly TutorialService     _tutorial;
     private readonly ModImportManager    _modImportManager;
+    private readonly IDragDropManager    _dragDrop;
     public           ModSettings         SelectedSettings          { get; private set; } = ModSettings.Empty;
     public           ModCollection       SelectedSettingCollection { get; private set; } = ModCollection.Empty;
 
     public ModFileSystemSelector(KeyState keyState, CommunicatorService communicator, ModFileSystem fileSystem, ModManager modManager,
         CollectionManager collectionManager, Configuration config, TutorialService tutorial, FileDialogService fileDialog, ChatService chat,
-        ModImportManager modImportManager)
-        : base(fileSystem, keyState, HandleException)
+        ModImportManager modImportManager, IDragDropManager dragDrop)
+        : base(fileSystem, keyState, HandleException, allowMultipleSelection: true)
     {
         _communicator      = communicator;
         _modManager        = modManager;
@@ -49,6 +48,7 @@ public sealed class ModFileSystemSelector : FileSystemSelector<Mod, ModFileSyste
         _fileDialog        = fileDialog;
         _chat              = chat;
         _modImportManager  = modImportManager;
+        _dragDrop          = dragDrop;
 
         // @formatter:off
         SubscribeRightClickFolder(EnableDescendants, 10);
@@ -80,6 +80,28 @@ public sealed class ModFileSystemSelector : FileSystemSelector<Mod, ModFileSyste
         _communicator.ModDiscoveryStarted.Subscribe(StoreCurrentSelection, ModDiscoveryStarted.Priority.ModFileSystemSelector);
         _communicator.ModDiscoveryFinished.Subscribe(RestoreLastSelection, ModDiscoveryFinished.Priority.ModFileSystemSelector);
         OnCollectionChange(CollectionType.Current, null, _collectionManager.Active.Current, "");
+    }
+
+    private static readonly string[] ValidModExtensions = new[]
+    {
+        ".ttmp",
+        ".ttmp2",
+        ".pmp",
+        ".zip",
+        ".rar",
+        ".7z",
+    };
+
+    public new void Draw(float width)
+    {
+        _dragDrop.CreateImGuiSource("ModDragDrop", m => m.Extensions.Any(e => ValidModExtensions.Contains(e.ToLowerInvariant())), m =>
+        {
+            ImGui.TextUnformatted($"Dragging mods for import:\n\t{string.Join("\n\t", m.Files.Select(Path.GetFileName))}");
+            return true;
+        });
+        base.Draw(width);
+        if (_dragDrop.CreateImGuiTarget("ModDragDrop", out var files, out _))
+            _modImportManager.AddUnpack(files.Where(f => ValidModExtensions.Contains(Path.GetExtension(f.ToLowerInvariant()))));
     }
 
     public override void Dispose()
@@ -142,6 +164,21 @@ public sealed class ModFileSystemSelector : FileSystemSelector<Mod, ModFileSyste
             .Push(ImGuiCol.HeaderHovered, 0x4000FFFF, leaf.Value.Favorite);
         using var id = ImRaii.PushId(leaf.Value.Index);
         ImRaii.TreeNode(leaf.Value.Name, flags).Dispose();
+        if (state.Priority != 0 && !_config.HidePrioritiesInSelector)
+        {
+            var line           = ImGui.GetItemRectMin().Y;
+            var itemPos        = ImGui.GetItemRectMax().X;
+            var maxWidth       = ImGui.GetWindowPos().X + ImGui.GetWindowContentRegionMax().X;
+            var priorityString = $"[{state.Priority}]";
+            var requiredSize   = ImGui.CalcTextSize(priorityString).X;
+            var remainingSpace = maxWidth - itemPos;
+            var offset         = remainingSpace - requiredSize;
+            if (ImGui.GetScrollMaxY() == 0)
+                offset -= ImGui.GetStyle().ItemInnerSpacing.X;
+
+            if (offset > ImGui.GetStyle().ItemSpacing.X)
+                ImGui.GetWindowDrawList().AddText(new Vector2(itemPos + offset, line), ColorId.SelectorPriority.Value(), priorityString);
+        }
     }
 
 
@@ -300,7 +337,7 @@ public sealed class ModFileSystemSelector : FileSystemSelector<Mod, ModFileSyste
 
     private void DrawHelpPopup()
     {
-        ImGuiUtil.HelpPopup("ExtendedHelp", new Vector2(1000 * UiHelpers.Scale, 34.5f * ImGui.GetTextLineHeightWithSpacing()), () =>
+        ImGuiUtil.HelpPopup("ExtendedHelp", new Vector2(1000 * UiHelpers.Scale, 36.5f * ImGui.GetTextLineHeightWithSpacing()), () =>
         {
             ImGui.Dummy(Vector2.UnitY * ImGui.GetTextLineHeight());
             ImGui.TextUnformatted("Mod Management");
@@ -339,6 +376,12 @@ public sealed class ModFileSystemSelector : FileSystemSelector<Mod, ModFileSyste
             indent.Pop(1);
             ImGui.BulletText(
                 "You can drag and drop mods and subfolders into existing folders. Dropping them onto mods is the same as dropping them onto the parent of the mod.");
+            indent.Push();
+            ImGui.BulletText(
+                "You can select multiple mods and folders by holding Control while clicking them, and then drag all of them at once.");
+            ImGui.BulletText(
+                "Selected mods inside an also selected folder will be ignored when dragging and move inside their folder instead of directly into the target.");
+            indent.Pop(1);
             ImGui.BulletText("Right-clicking a folder opens a context menu.");
             ImGui.BulletText("Right-clicking empty space allows you to expand or collapse all folders at once.");
             ImGui.BulletText("Use the Filter Mods... input at the top to filter the list for mods whose name or path contain the text.");
@@ -352,7 +395,7 @@ public sealed class ModFileSystemSelector : FileSystemSelector<Mod, ModFileSyste
     }
 
     private static void HandleException(Exception e)
-        => Penumbra.ChatService.NotificationMessage(e.Message, "Failure", NotificationType.Warning);
+        => Penumbra.Chat.NotificationMessage(e.Message, "Failure", NotificationType.Warning);
 
     #endregion
 
@@ -430,7 +473,7 @@ public sealed class ModFileSystemSelector : FileSystemSelector<Mod, ModFileSyste
 
         var leaf = (ModFileSystem.Leaf?)FileSystem.Root.GetAllDescendants(ISortMode<Mod>.Lexicographical)
             .FirstOrDefault(l => l is ModFileSystem.Leaf m && m.Value.ModPath.FullName == _lastSelectedDirectory);
-        Select(leaf);
+        Select(leaf, AllowMultipleSelection);
         _lastSelectedDirectory = string.Empty;
     }
 
@@ -442,6 +485,7 @@ public sealed class ModFileSystemSelector : FileSystemSelector<Mod, ModFileSyste
     public struct ModState
     {
         public ColorId Color;
+        public int     Priority;
     }
 
     private const StringComparison IgnoreCase   = StringComparison.OrdinalIgnoreCase;
@@ -638,10 +682,14 @@ public sealed class ModFileSystemSelector : FileSystemSelector<Mod, ModFileSyste
     /// <summary> Combined wrapper for handling all filters and setting state. </summary>
     private bool ApplyFiltersAndState(ModFileSystem.Leaf leaf, out ModState state)
     {
-        state = new ModState { Color = ColorId.EnabledMod };
         var mod = leaf.Value;
         var (settings, collection) = _collectionManager.Active.Current[mod.Index];
 
+        state = new ModState
+        {
+            Color    = ColorId.EnabledMod,
+            Priority = settings?.Priority ?? 0,
+        };
         if (ApplyStringFilters(leaf, mod))
             return true;
 
@@ -652,12 +700,13 @@ public sealed class ModFileSystemSelector : FileSystemSelector<Mod, ModFileSyste
         return false;
     }
 
-    private void DrawFilterCombo(ref bool everything)
+    private bool DrawFilterCombo(ref bool everything)
     {
         using var combo = ImRaii.Combo("##filterCombo", string.Empty,
             ImGuiComboFlags.NoPreview | ImGuiComboFlags.PopupAlignLeft | ImGuiComboFlags.HeightLargest);
+        var ret = ImGui.IsItemClicked(ImGuiMouseButton.Right);
         if (!combo)
-            return;
+            return ret;
 
         using var style = ImRaii.PushStyle(ImGuiStyleVar.ItemSpacing,
             ImGui.GetStyle().ItemSpacing with { Y = 3 * UiHelpers.Scale });
@@ -679,10 +728,12 @@ public sealed class ModFileSystemSelector : FileSystemSelector<Mod, ModFileSyste
                 SetFilterDirty();
             }
         }
+
+        return ret;
     }
 
     /// <summary> Add the state filter combo-button to the right of the filter box. </summary>
-    protected override float CustomFilters(float width)
+    protected override (float, bool) CustomFilters(float width)
     {
         var pos            = ImGui.GetCursorPos();
         var remainingWidth = width - ImGui.GetFrameHeight();
@@ -692,10 +743,10 @@ public sealed class ModFileSystemSelector : FileSystemSelector<Mod, ModFileSyste
 
         ImGui.SetCursorPos(comboPos);
         // Draw combo button
-        using var color = ImRaii.PushColor(ImGuiCol.Button, Colors.FilterActive, !everything);
-        DrawFilterCombo(ref everything);
+        using var color      = ImRaii.PushColor(ImGuiCol.Button, Colors.FilterActive, !everything);
+        var       rightClick = DrawFilterCombo(ref everything);
         _tutorial.OpenTutorial(BasicTutorialSteps.ModFilters);
-        if (ImGui.IsItemClicked(ImGuiMouseButton.Right))
+        if (rightClick)
         {
             _stateFilter = ModFilterExtensions.UnfilteredStateMods;
             SetFilterDirty();
@@ -703,7 +754,7 @@ public sealed class ModFileSystemSelector : FileSystemSelector<Mod, ModFileSyste
 
         ImGuiUtil.HoverTooltip("Filter mods for their activation status.\nRight-Click to clear all filters.");
         ImGui.SetCursorPos(pos);
-        return remainingWidth;
+        return (remainingWidth, rightClick);
     }
 
     #endregion

@@ -1,11 +1,9 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
 using Dalamud.Interface.Internal.Notifications;
 using OtterGui;
 using OtterGui.Filesystem;
 using Penumbra.Api.Enums;
 using Penumbra.Meta.Manipulations;
+using Penumbra.Mods.Subclasses;
 using Penumbra.Services;
 using Penumbra.String.Classes;
 using Penumbra.Util;
@@ -127,11 +125,10 @@ public class ModOptionEditor
     /// <summary> Delete a given option group. Fires an event to prepare before actually deleting. </summary>
     public void DeleteModGroup(Mod mod, int groupIdx)
     {
-        var group = mod.Groups[groupIdx];
         _communicator.ModOptionChanged.Invoke(ModOptionChangeType.PrepareChange, mod, groupIdx, -1, -1);
         mod.Groups.RemoveAt(groupIdx);
         UpdateSubModPositions(mod, groupIdx);
-        _saveService.SaveAllOptionGroups(mod);
+        _saveService.SaveAllOptionGroups(mod, false);
         _communicator.ModOptionChanged.Invoke(ModOptionChangeType.GroupDeleted, mod, groupIdx, -1, -1);
     }
 
@@ -142,7 +139,7 @@ public class ModOptionEditor
             return;
 
         UpdateSubModPositions(mod, Math.Min(groupIdxFrom, groupIdxTo));
-        _saveService.SaveAllOptionGroups(mod);
+        _saveService.SaveAllOptionGroups(mod, false);
         _communicator.ModOptionChanged.Invoke(ModOptionChangeType.GroupMoved, mod, groupIdxFrom, -1, groupIdxTo);
     }
 
@@ -349,7 +346,7 @@ public class ModOptionEditor
     }
 
     /// <summary> Set the file redirections for a given option. Replaces existing redirections. </summary>
-    public void OptionSetFiles(Mod mod, int groupIdx, int optionIdx, Dictionary<Utf8GamePath, FullPath> replacements)
+    public void OptionSetFiles(Mod mod, int groupIdx, int optionIdx, IReadOnlyDictionary<Utf8GamePath, FullPath> replacements)
     {
         var subMod = GetSubMod(mod, groupIdx, optionIdx);
         if (subMod.FileData.SetEquals(replacements))
@@ -362,7 +359,7 @@ public class ModOptionEditor
     }
 
     /// <summary> Add additional file redirections to a given option, keeping already existing ones. Only fires an event if anything is actually added.</summary>
-    public void OptionAddFiles(Mod mod, int groupIdx, int optionIdx, Dictionary<Utf8GamePath, FullPath> additions)
+    public void OptionAddFiles(Mod mod, int groupIdx, int optionIdx, IReadOnlyDictionary<Utf8GamePath, FullPath> additions)
     {
         var subMod   = GetSubMod(mod, groupIdx, optionIdx);
         var oldCount = subMod.FileData.Count;
@@ -375,7 +372,7 @@ public class ModOptionEditor
     }
 
     /// <summary> Set the file swaps for a given option. Replaces existing swaps. </summary>
-    public void OptionSetFileSwaps(Mod mod, int groupIdx, int optionIdx, Dictionary<Utf8GamePath, FullPath> swaps)
+    public void OptionSetFileSwaps(Mod mod, int groupIdx, int optionIdx, IReadOnlyDictionary<Utf8GamePath, FullPath> swaps)
     {
         var subMod = GetSubMod(mod, groupIdx, optionIdx);
         if (subMod.FileSwapData.SetEquals(swaps))
@@ -398,7 +395,7 @@ public class ModOptionEditor
             return true;
 
         if (message)
-            Penumbra.ChatService.NotificationMessage(
+            Penumbra.Chat.NotificationMessage(
                 $"Could not name option {newName} because option with same filename {path} already exists.",
                 "Warning", NotificationType.Warning);
 
