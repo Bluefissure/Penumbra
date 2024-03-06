@@ -1,3 +1,6 @@
+
+**Please go to https://github.com/MeowZWR/Penumbra-CN for CN support of Penumbra of patch 6.5+**
+
 # Penumbra
 
 Penumbra is a runtime mod loader for FINAL FANTASY XIV, with a bunch of other useful features baked in:
